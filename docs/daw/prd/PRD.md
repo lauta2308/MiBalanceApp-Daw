@@ -394,10 +394,10 @@ En estos criterios, "hoy" es el sábado 03/10/2026.
 
 ## Historial de Cambios
 
-- 2026-10-10 — Clarificación de la feature 001 (`specs/001-cuenta-movimientos/spec.md`):
+- 2026-10-10 — Clarificación de la sección Cuenta y sus movimientos:
   - Doble envío: se agrega RF-106 (AC-129, AC-130).
   - Fecha máxima en el servidor: se agrega RF-107 (AC-131) y se ajusta el riesgo de zona horaria.
   - Uso con teclado y lector de pantalla: se agrega RNF-08 (AC-133).
   - Fecha mínima: se agrega RF-108, sin fecha mínima (AC-132).
-  - Error al iniciar la sesión temporal: es un requisito provisorio de la feature 001 (inicio de sesión anónimo) y no se agrega como RF; se resuelve como un error de RF-105, con "Aceptar" para reintentar, y se reemplaza por RF-24 cuando se incorpore Google.
+  - Error al iniciar la sesión temporal: es un requisito provisorio mientras se usa el inicio de sesión anónimo y no se agrega como RF; se resuelve como un error de RF-105, con "Aceptar" para reintentar, y se reemplaza por RF-24 cuando se incorpore Google.
 - 2026-10-24 — Revisión del PRD: los mensajes de éxito ya no usan un botón "Aceptar" y se cierran solos a los 3 segundos, para que el gasto se registre en las 3 interacciones de O-1. RF-104 se divide en RF-104 (éxito) y RF-105 (error, que sigue con "Aceptar"); se ajustan AC-111 a AC-113 y se agrega AC-128.
