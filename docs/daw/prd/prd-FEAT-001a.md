@@ -6,7 +6,7 @@
 | Ticket padre | FEAT-001 (Cuenta y Movimientos) |
 | Tracker | none |
 | Date | 2026-10-25 |
-| PRD loops | 1 |
+| PRD loops | 4 |
 
 > Sub-ticket de FEAT-001. Deriva de `docs/daw/prd/PRD.md` (PRD-001) y `docs/daw/prd/INTERFAZ.md`.
 > Cada requerimiento indica entre paréntesis su origen: `RF-xx` y `RNF-xx` de `PRD.md`, `UI-xx` de
@@ -29,7 +29,8 @@ anónimo de Supabase, de forma provisoria y aislada (ver "Stack" en `AGENTS.md`)
   de un usuario: ahí se crean su cuenta y sus categorías por defecto.
 - S-2: La creación de categorías propias queda fuera de este sub-ticket. Los criterios que usan
   categorías como "Mercado", "Sueldo", "Transporte" o "café" se prueban con esas categorías cargadas
-  directamente en la base de datos por la prueba. En la aplicación, el usuario solo ve "Pago
+  directamente en la base de datos por la prueba, con las credenciales de administrador de Supabase
+  (service role key), que existen solo en el entorno de pruebas y nunca en la aplicación. En la aplicación, el usuario solo ve "Pago
   Realizado" y "Pago Ingresado" hasta que llegue la feature de Categorías.
 - S-3: La barra de navegación (RF-26) no se incluye: la sección Cuenta es la única sección que
   existe. Solo se incluye la flecha para volver atrás del formulario de alta (RF-01, RF-03).
@@ -82,9 +83,9 @@ anónimo de Supabase, de forma provisoria y aislada (ver "Stack" en `AGENTS.md`)
 - FR-24 (RF-41): El sistema debe rechazar el registro de un movimiento con el monto vacío o no mayor a 0, con el mensaje "El monto debe ser mayor a 0.".
 - FR-25 (RF-42): El sistema debe rechazar el registro de un movimiento con un monto mayor a 999.999.999.999,99, con el mensaje "El monto máximo es 999.999.999.999,99.".
 - FR-26 (RF-43): El sistema debe impedir escribir más de dos decimales en el campo de monto.
-- FR-27 (RF-44): El sistema debe aceptar en el campo de monto solo dígitos y una coma decimal, sin signos ni letras.
+- FR-27 (RF-44): El sistema debe aceptar en el campo de monto solo dígitos y una coma decimal, sin signos ni letras, ignorando una segunda coma y aplicando el mismo filtro al texto pegado (solo se conservan los dígitos y la primera coma).
 - FR-28 (UI-04): El sistema debe agregar el punto como separador de miles en el campo de monto mientras el usuario escribe (ej. "1500000" se muestra "1.500.000").
-- FR-29 (RF-39, RF-41, RF-42, RF-43): El sistema debe rechazar desde la API el registro de un movimiento con monto no mayor a 0, mayor a 999.999.999.999,99 o con más de dos decimales, o con una categoría de otro tipo, sin registrar nada ni modificar el saldo.
+- FR-29 (RF-32, RF-33, RF-39, RF-41, RF-42, RF-43): El sistema debe rechazar desde la API el registro de un movimiento sin monto, sin categoría o sin fecha, con monto no mayor a 0, mayor a 999.999.999.999,99 o con más de dos decimales, o con una categoría de otro tipo, sin registrar nada ni modificar el saldo.
 - FR-30 (RF-91): El sistema debe mostrar el botón "Guardar" en los formularios "Añadir Gasto" y "Añadir Ingreso".
 - FR-31 (RF-64): El sistema debe permitir cerrar el formulario de alta sin registrar nada con la opción "Cancelar".
 - FR-32 (RF-01, RF-03): El sistema debe mostrar en el formulario de alta una flecha para volver atrás que lo cierra sin registrar nada y vuelve a la sección Cuenta, y no debe mostrar esa flecha en la sección Cuenta.
@@ -104,10 +105,17 @@ anónimo de Supabase, de forma provisoria y aislada (ver "Stack" en `AGENTS.md`)
 
 **Mensajes**
 
-- FR-43 (RF-69, RF-104, UI-14): El sistema debe mostrar "Gasto registrado con éxito." o "Ingreso registrado con éxito." al completar el alta, con un ícono de tic verde, durante 3 segundos, cerrándolo solo, sin botón "Aceptar" y sin impedir seguir usando la aplicación.
-- FR-44 (RF-105, UI-15): El sistema debe mostrar cada mensaje de error, incluidos los de validación, con un ícono de cruz roja, hasta que el usuario presione su botón "Aceptar".
+- FR-43 (RF-69, RF-104, UI-14): El sistema debe mostrar "Gasto registrado con éxito." o "Ingreso registrado con éxito." al completar el alta, con un ícono de tic verde, durante 3 segundos, cerrándolo solo, sin botón "Aceptar" y sin impedir seguir usando la aplicación; un mensaje de éxito nuevo reemplaza al que esté en pantalla y cuenta sus propios 3 segundos desde que aparece.
+- FR-44 (RF-105, UI-15): El sistema debe mostrar cada mensaje de error, incluidos los de validación, con un ícono de cruz roja, hasta que el usuario presione su botón "Aceptar"; al cerrar un error de validación, el formulario sigue abierto con todos los datos ingresados y el foco vuelve al campo con el error.
 - FR-45 (RNF-07): El sistema debe mostrar el mensaje "No se pudieron cargar sus movimientos. Vuelva a intentarlo." cuando falle la carga de la cuenta, el saldo o la lista; al presionar "Aceptar" debe reintentar la carga.
 - FR-46 (RNF-07, RNF-05): El sistema debe mostrar el mensaje "No se pudo guardar el movimiento. Vuelva a intentarlo." cuando el servidor falle o rechace el alta (incluida una fecha rechazada por FR-22), manteniendo abierto el formulario con los datos ingresados y sin modificar la lista ni el saldo.
+
+**Agregados en la revisión de DEFINE**
+
+- FR-47 (UI-05, RF-50): El sistema debe mostrar el encabezado de la fecha al principio de cada página de la lista, también cuando el grupo de esa fecha empieza en la página anterior.
+- FR-48 (RF-37, UI-05): El sistema debe mostrar en los formularios de alta los campos "Monto", "Categoría" y "Fecha"; el campo "Fecha" con el formato DD/MM/AAAA, y el calendario en español con la semana de lunes a domingo.
+- FR-49 (RF-73 a RF-89, S-2): El sistema debe rechazar, cuando la operación llega desde la API con la sesión de un usuario, la creación, la edición y la eliminación de cualquier categoría, salvo la creación automática de las categorías por defecto al registrarse (FR-05), hasta que la feature de Categorías habilite esas operaciones con sus validaciones.
+- FR-50 (RF-06 a RF-14): El sistema debe rechazar, cuando la operación llega desde la API con la sesión de un usuario, la modificación del nombre, de la moneda y del saldo de su cuenta, salvo los cambios del saldo que producen las operaciones de movimientos de la aplicación (FR-09, FR-10), hasta que la feature "Editar Cuenta" habilite el cambio de nombre y de moneda con sus validaciones.
 
 ## Non-Functional Requirements
 
@@ -147,9 +155,9 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 
 - AC-12 (FR-12, FR-10, FR-43; origen: PRD AC-43): WHEN el usuario A con saldo USD 10.000,00 y una categoría de gastos "Mercado" presiona "Añadir Gasto", ingresa el monto 1500, selecciona "Mercado", deja la fecha de hoy y presiona "Guardar", THE sistema SHALL mostrar bajo la fecha de hoy un movimiento con la categoría "Mercado" y el monto "-1.500,00", el saldo "USD 8.500,00" y el mensaje "Gasto registrado con éxito.".
 - AC-13 (FR-13, FR-09, FR-43; origen: PRD AC-44): WHEN el usuario A con saldo USD 10.000,00 y una categoría de ingresos "Sueldo" presiona "Añadir Ingreso", ingresa el monto 1000, selecciona "Sueldo", deja la fecha de hoy y presiona "Guardar", THE sistema SHALL mostrar bajo la fecha de hoy un movimiento con la categoría "Sueldo" y el monto "+1.000,00", el saldo "USD 11.000,00" y el mensaje "Ingreso registrado con éxito.".
-- AC-14 (FR-24, FR-44; origen: PRD AC-45, AC-112, AC-UI-15): IF el usuario A con saldo USD 10.000,00 intenta guardar un gasto con el monto vacío o con el monto 0, THEN THE sistema SHALL no registrar el movimiento en ninguno de los dos casos, mostrar "El monto debe ser mayor a 0." con un ícono de cruz roja y el botón "Aceptar", y mantener el saldo en "USD 10.000,00".
+- AC-14 (FR-24, FR-44; origen: PRD AC-45, AC-112, AC-UI-15): IF el usuario A con saldo USD 10.000,00 y una categoría de gastos "Mercado", que eligió "Mercado" y la fecha 01/10/2026, intenta guardar un gasto con el monto vacío o con el monto 0, THEN THE sistema SHALL no registrar el movimiento en ninguno de los dos casos, mostrar "El monto debe ser mayor a 0." con un ícono de cruz roja y el botón "Aceptar", mantener el saldo en "USD 10.000,00" y, al presionar "Aceptar", dejar el formulario abierto con "Mercado" y 01/10/2026 y el foco en el campo "Monto".
 - AC-15 (FR-25; origen: PRD AC-46): IF el usuario A con saldo USD 0,00 intenta guardar un ingreso de 1.000.000.000.000,00, THEN THE sistema SHALL no registrarlo y mostrar "El monto máximo es 999.999.999.999,99."; WHEN después guarda un ingreso de 999.999.999.999,99, THE sistema SHALL registrarlo y mostrar el saldo "USD 999.999.999.999,99".
-- AC-16 (FR-29; origen: PRD AC-49): IF el usuario A con saldo USD 10.000,00 y una categoría de ingresos "Sueldo" intenta registrar directamente desde la API un gasto con monto 0, con monto -50, con monto 1000000000000.00, con monto 10.555 o con la categoría "Sueldo", THEN THE sistema SHALL rechazar las cinco operaciones, no registrar ningún movimiento y mantener el saldo en USD 10.000,00.
+- AC-16 (FR-29; origen: PRD AC-49): IF el usuario A con saldo USD 10.000,00 y una categoría de ingresos "Sueldo" intenta registrar directamente desde la API un gasto con monto 0, con monto -50, con monto 1000000000000.00, con monto 10.555, con la categoría "Sueldo", sin monto, sin categoría o sin fecha, THEN THE sistema SHALL rechazar las ocho operaciones, no registrar ningún movimiento y mantener el saldo en USD 10.000,00.
 - AC-17 (FR-26; origen: PRD AC-50): WHEN el usuario A en "Añadir Gasto" intenta escribir "10,555" en el campo de monto, THE sistema SHALL no aceptar el tercer decimal y mostrar "10,55".
 - AC-18 (FR-27; origen: PRD AC-51): WHEN el usuario A en "Añadir Gasto" intenta escribir "-50" o "abc50" en el campo de monto, THE sistema SHALL no aceptar el signo "-" ni las letras y mostrar "50" en ambos casos.
 - AC-19 (FR-28; origen: AC-UI-03): WHEN el usuario A en "Añadir Gasto" escribe "1500000" o "1500,50" en el campo de monto, THE sistema SHALL mostrar "1.500.000" o "1.500,50", respectivamente.
@@ -158,7 +166,7 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - AC-22 (FR-15, FR-16; origen: PRD AC-54): WHEN el usuario A con una categoría de gastos "Mercado" y una de ingresos "Sueldo" presiona "Añadir Gasto" y abre el selector de categoría, THE sistema SHALL mostrar solo "Pago Realizado" y "Mercado", sin "Pago Ingresado", "Sueldo" ni una opción vacía o "sin categoría".
 - AC-23 (FR-18; origen: PRD AC-55): WHEN el usuario A presiona "Añadir Gasto" o "Añadir Ingreso", THE sistema SHALL mostrar preseleccionada la categoría "Pago Realizado" o "Pago Ingresado", respectivamente.
 - AC-24 (FR-19; origen: PRD AC-56): WHEN el usuario A en "Añadir Gasto" abre el calendario, THE sistema SHALL tener siempre una fecha seleccionada y no ofrecer una opción para dejar la fecha vacía.
-- AC-25 (FR-14; origen: PRD AC-57): WHEN el usuario A que en "Añadir Ingreso" ingresó el monto 500, eligió la categoría "Sueldo" y cambió la fecha a 01/10/2026 vuelve atrás con la flecha, o guarda el ingreso, y presiona otra vez "Añadir Ingreso", THE sistema SHALL mostrar en ambos casos el monto vacío, la categoría "Pago Ingresado" y la fecha de hoy.
+- AC-25 (FR-14; origen: PRD AC-57): WHEN el usuario A que en "Añadir Ingreso" ingresó el monto 500, eligió la categoría "Sueldo" y cambió la fecha a 01/10/2026 vuelve atrás con la flecha, presiona "Cancelar" o guarda el ingreso, y presiona otra vez "Añadir Ingreso", THE sistema SHALL mostrar en los tres casos el monto vacío, la categoría "Pago Ingresado" y la fecha de hoy.
 - AC-26 (FR-17; origen: PRD AC-58): WHEN el usuario A con las categorías de gastos "Transporte", "café" y "Mercado" abre el selector de categoría en "Añadir Gasto", THE sistema SHALL mostrar las opciones en este orden: "Pago Realizado", "café", "Mercado" y "Transporte".
 - AC-27 (FR-11; origen: PRD AC-59): WHEN el usuario A con saldo USD 1.000,00 registra un gasto de 2000, THE sistema SHALL registrarlo y mostrar el saldo "USD -1.000,00".
 - AC-28 (FR-22; origen: PRD AC-131): IF el usuario A con saldo USD 10.000,00 intenta registrar directamente desde la API un gasto con fecha dos días posterior a la fecha actual en UTC, THEN THE sistema SHALL rechazar la operación, no registrar ningún movimiento y mantener el saldo en USD 10.000,00.
@@ -169,6 +177,9 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - AC-33 (FR-31; origen: PRD AC-67): WHEN el usuario A con saldo USD 10.000,00 abre "Añadir Gasto", ingresa el monto 500 y presiona "Cancelar", THE sistema SHALL cerrar el formulario sin registrar ningún movimiento y mantener el saldo en "USD 10.000,00".
 - AC-34 (FR-30; origen: PRD AC-98): WHEN el usuario A abre "Añadir Gasto" o "Añadir Ingreso", THE sistema SHALL mostrar el botón "Guardar" en ambos formularios.
 - AC-35 (FR-33; origen: PRD AC-129): WHEN el usuario A con saldo USD 10.000,00 que en "Añadir Gasto" ingresó el monto 1500 presiona "Guardar" dos veces seguidas, THE sistema SHALL mostrar el botón deshabilitado con el texto "Guardando…" y no permitir editar ni cerrar el formulario mientras se procesa, registrar un solo gasto y mostrar el saldo "USD 8.500,00".
+- AC-65 (FR-27): WHEN el usuario A en "Añadir Gasto" escribe "1,5" y después otra coma y un "0", THE sistema SHALL ignorar la segunda coma y mostrar "1,50".
+- AC-66 (FR-27): WHEN el usuario A pega "$ 1.500,50" en el campo de monto vacío de "Añadir Gasto", y después pega "abc" con el campo mostrando "1.500,50", THE sistema SHALL mostrar "1.500,50" en ambos casos.
+- AC-67 (FR-48): WHEN el usuario A abre "Añadir Gasto" el 03/10/2026 y abre el calendario, THE sistema SHALL mostrar los campos "Monto", "Categoría" y "Fecha", el campo "Fecha" con "03/10/2026" y el calendario de octubre de 2026 con el nombre del mes y de los días en español y la semana empezando el lunes.
 
 **Lista de movimientos**
 
@@ -181,11 +192,13 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - AC-42 (FR-39, FR-40, FR-41; origen: PRD AC-39): WHEN el usuario A con 120 movimientos en la página 1 presiona "Siguiente" dos veces, THE sistema SHALL mostrar primero los movimientos 51 a 100 en el mismo orden con el indicador "Página 2 de 3", y después los 20 más antiguos con el indicador "Página 3 de 3" y el botón "Siguiente" deshabilitado.
 - AC-43 (FR-41; origen: PRD AC-41): WHEN el usuario A con 30 movimientos accede a la sección Cuenta, THE sistema SHALL mostrar los 30 movimientos sin los botones "Anterior" y "Siguiente" ni el indicador de página.
 - AC-44 (FR-42; origen: PRD AC-40): WHEN el usuario A con 120 movimientos que está en la página 2 añade un gasto con fecha de hoy, THE sistema SHALL mostrar la página 1 con el indicador "Página 1 de 3" y el gasto nuevo en primer lugar.
+- AC-63 (FR-47): WHEN el usuario A con 55 movimientos, de los cuales los que ocupan los lugares 48 a 55 de la lista son del 01/10/2026, presiona "Siguiente", THE sistema SHALL mostrar al principio de la página 2 el encabezado "01/10/2026" seguido de los movimientos 51 a 55.
+- AC-64 (FR-41): WHEN el usuario A con 50 movimientos accede a la sección Cuenta, THE sistema SHALL mostrar los 50 sin los botones "Anterior" y "Siguiente" ni el indicador de página; WHEN después registra un movimiento más, THE sistema SHALL mostrar el indicador "Página 1 de 2" y el botón "Siguiente" habilitado.
 
 **Mensajes**
 
 - AC-45 (FR-43; origen: PRD AC-111, AC-UI-15): WHEN el usuario A registra un gasto, THE sistema SHALL mostrar "Gasto registrado con éxito." con un ícono de tic verde, sin el botón "Aceptar", y cerrarlo solo a los 3 segundos.
-- AC-46 (FR-43; origen: PRD AC-128): WHEN el usuario A, con el mensaje "Gasto registrado con éxito." todavía en pantalla, presiona "Añadir Gasto", ingresa el monto 500 y presiona "Guardar", THE sistema SHALL registrar el segundo gasto sin que haya tenido que cerrar el primer mensaje, en 3 interacciones.
+- AC-46 (FR-43; origen: PRD AC-128): WHEN el usuario A, con el mensaje "Gasto registrado con éxito." todavía en pantalla, presiona "Añadir Gasto", ingresa el monto 500 y presiona "Guardar", THE sistema SHALL registrar el segundo gasto sin que haya tenido que cerrar el primer mensaje, en 3 interacciones, reemplazar el primer mensaje por el nuevo "Gasto registrado con éxito." y mantener el nuevo visible durante 3 segundos completos desde que aparece.
 - AC-47 (FR-44; origen: PRD AC-113): WHILE el mensaje "El monto debe ser mayor a 0." está en pantalla, WHEN pasan 10 segundos sin que el usuario A presione "Aceptar" y después lo presiona, THE sistema SHALL mantener el mensaje visible a los 10 segundos y cerrarlo al presionar "Aceptar".
 - AC-48 (FR-45, NFR-06): IF falla la carga de la cuenta, el saldo o la lista al mostrar la sección Cuenta (simulado en la prueba), THEN THE sistema SHALL mostrar "No se pudieron cargar sus movimientos. Vuelva a intentarlo." con el botón "Aceptar" y, al presionarlo con el servidor ya respondiendo, cargar y mostrar el saldo y la lista.
 - AC-49 (FR-46, NFR-06): IF el servidor falla al guardar un gasto de 1500 del usuario A con saldo USD 10.000,00 (simulado en la prueba), THEN THE sistema SHALL mostrar "No se pudo guardar el movimiento. Vuelva a intentarlo.", mantener abierto el formulario con el monto "1.500" y la categoría y la fecha elegidas, no agregar el movimiento a la lista y mantener el saldo en "USD 10.000,00".
@@ -199,12 +212,14 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - AC-54 (NFR-04): IF el usuario A con saldo USD 10.000,00 intenta modificar directamente desde la API el saldo de su cuenta, o crear, editar o eliminar uno de sus movimientos sin pasar por las operaciones de la aplicación, THEN THE sistema SHALL rechazar la operación o mantener el saldo igual a la suma de los ingresos menos la suma de los gastos de la cuenta, verificado después de cada intento.
 - AC-55 (NFR-03; origen: PRD AC-121): WHEN el usuario A con saldo USD 0,00 registra un ingreso de 0,10 y otro de 0,20, THE sistema SHALL mostrar el saldo "USD 0,30" y almacenar los montos y el saldo en columnas de tipo numeric.
 - AC-56 (NFR-03; origen: PRD AC-122): WHEN el usuario A con saldo USD 0,00 registra dos ingresos de 999.999.999.999,99, THE sistema SHALL registrar ambos y mostrar el saldo "USD 1.999.999.999.999,98".
-- AC-57 (NFR-04; origen: PRD AC-123): IF se simula una falla después de escribir el movimiento y antes de actualizar el saldo al dar de alta un gasto de 1000 del usuario A con saldo USD 10.000,00, THEN THE sistema SHALL no registrar ningún movimiento, mantener el saldo en USD 10.000,00 y mostrar un mensaje de error.
+- AC-57 (NFR-04; origen: PRD AC-123): IF se simula una falla después de escribir el movimiento y antes de actualizar el saldo al dar de alta un gasto de 1000 del usuario A con saldo USD 10.000,00, THEN THE sistema SHALL no registrar ningún movimiento, mantener el saldo en USD 10.000,00, mostrar "No se pudo guardar el movimiento. Vuelva a intentarlo." y mantener abierto el formulario con los datos ingresados.
 - AC-58 (NFR-04; adapta PRD AC-125): WHEN se ejecuta sobre el usuario A con saldo USD 0,00 una secuencia fija, definida en la prueba, de 20 altas de ingresos y gastos intercalados, THE sistema SHALL mantener después de cada alta el saldo igual a la suma de los ingresos menos la suma de los gastos de la cuenta.
 - AC-59 (NFR-05; adapta PRD AC-126): WHEN el usuario A usa la sección Cuenta y el formulario de alta con anchos de viewport de 320px, 768px, 1280px y 1920px, THE sistema SHALL permitir en cada ancho ver el saldo y la lista, paginar y registrar un gasto y un ingreso, sin desplazamiento horizontal.
 - AC-60 (NFR-06; adapta PRD AC-127): IF se simula una falla del servidor en el inicio de sesión, en la carga de la cuenta y la lista y en el alta de un movimiento, THEN THE sistema SHALL mostrar en cada caso un mensaje en español, tratando de usted, sin códigos de error internos ni stack traces.
 - AC-61 (NFR-07; adapta PRD AC-133): WHEN el usuario A usa solo el teclado para registrar un gasto y un ingreso, incluidos el calendario, el selector de categoría, la paginación y los mensajes, THE sistema SHALL permitir completar todas las acciones, distinguir visualmente el elemento con foco en cada paso y exponer a un lector de pantalla el texto alternativo de los íconos de tic, de cruz y de la flecha para volver atrás.
 - AC-62 (NFR-08; adapta AC-UI-12): WHEN se analizan con axe-core la sección Cuenta (con saldo positivo, negativo y cero, y con la lista y la paginación), los formularios "Añadir Gasto" y "Añadir Ingreso" con el calendario y el selector abiertos, y los mensajes de éxito y de error, THE sistema SHALL tener el 100% de los textos con un contraste de al menos 4,5:1 (3:1 para texto grande) y los íconos de tic y de cruz con al menos 3:1.
+- AC-68 (FR-49): IF el usuario A autenticado intenta desde la API crear una categoría de gastos "Viajes", renombrar a "Otra" una categoría "Mercado" cargada por la prueba o eliminarla, THEN THE sistema SHALL rechazar las tres operaciones, no crear "Viajes" y mantener "Mercado" con su nombre.
+- AC-69 (FR-50): IF el usuario A autenticado con la cuenta "Mi Cuenta" en USD y saldo USD 0,00 intenta desde la API cambiar el nombre de su cuenta a "", la moneda a "ARS" o el saldo a 1000000, THEN THE sistema SHALL rechazar las tres operaciones y la sección Cuenta SHALL seguir mostrando "Mi Cuenta (USD)" y el saldo "USD 0,00".
 
 ## Out of Scope
 
@@ -223,7 +238,8 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 
 - Riesgo: saldo inconsistente o estado parcial en el alta → mitigación: el alta y la actualización del saldo se ejecutan en una sola operación atómica en la base de datos, probada con fallas simuladas (NFR-04, AC-57, AC-58).
 - Riesgo: un usuario accede a datos de otro → mitigación: políticas de acceso en Supabase restringidas al propietario, verificadas con pruebas directas contra la API (NFR-02, AC-51 a AC-53).
-- Riesgo: el saldo se modifica por fuera de las operaciones de la aplicación → mitigación: el saldo no se puede escribir directamente desde la API (AC-54).
+- Riesgo: el saldo se modifica por fuera de las operaciones de la aplicación → mitigación: el saldo solo cambia a través de las operaciones de alta de movimientos (y, en FEAT-001b y FEAT-001c, de edición y eliminación), y se prueban los intentos de alterarlo directamente desde la API (AC-54, AC-69).
+- Riesgo: categorías o datos de la cuenta inválidos creados desde la API antes de que existan sus features (nombres vacíos, duplicados, moneda cambiada con movimientos) → mitigación: en este sub-ticket la API no permite crear, editar ni eliminar categorías ni modificar la cuenta (FR-49, FR-50).
 - Riesgo: errores de precisión con decimales → mitigación: tipo numeric para montos y saldo, y pruebas con 0,10 + 0,20 y con el monto máximo (NFR-03, AC-55, AC-56).
 - Riesgo: corrimiento del día por zona horaria → mitigación: la fecha es un día calendario (`date`), "hoy" se calcula con la fecha local del dispositivo y el servidor solo rechaza fechas posteriores a mañana en UTC (FR-20, FR-22, AC-29, AC-31).
 - Riesgo: límite de Supabase de ~30 inicios de sesión anónimos por hora por IP, que puede frenar las pruebas automatizadas → mitigación: reutilizar usuarios de prueba dentro de una corrida, marcarlos con `es_prueba = true` y borrarlos con el script de limpieza (ver `AGENTS.md`).
@@ -234,6 +250,6 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 ## Dependencies
 
 - Documentos de producto: `docs/daw/prd/PRD.md` (RF-xx, RNF-xx, AC-xx de origen) y `docs/daw/prd/INTERFAZ.md` (UI-xx, AC-UI-xx de origen).
-- Un proyecto de Supabase con "Allow anonymous sign-ins" activado, su URL y su anon key en `.env.local`.
+- Un proyecto de Supabase con "Allow anonymous sign-ins" activado, su URL y su anon key en `.env.local`, y su service role key disponible solo para las pruebas (S-2), nunca en el código de la aplicación.
 - Stack de `AGENTS.md`: React 19 + Vite, supabase-js, react-router, react-day-picker + date-fns, Vitest + Testing Library, Playwright + axe-core.
 - No depende de otros sub-tickets. FEAT-001b y FEAT-001c dependen de este.

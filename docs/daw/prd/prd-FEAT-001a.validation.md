@@ -2,7 +2,7 @@
 /daw-validate-prd docs/daw/prd/prd-FEAT-001a.md — PASSED
 ────────────────────────────────────────────────────────────────
   ✅ F-PRD-08: all mandatory sections present
-  ✅ F-PRD-05: 46 FR, 8 NFR, 62 AC — unique, gapless
+  ✅ F-PRD-05: 50 FR, 8 NFR, 69 AC — unique, gapless
   ✅ F-PRD-01: every FR is validated by at least one AC
   ✅ F-PRD-03: every NFR carries a quantitative value
   ✅ F-PRD-04: Out of Scope has explicit items
