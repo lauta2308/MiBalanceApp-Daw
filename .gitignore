@@ -19,3 +19,6 @@ __pycache__/
 # Variables de entorno locales (nunca se commitean)
 .env
 .env*.local
+
+# Archivos temporales de la CLI de Supabase (supabase link)
+supabase/.temp/

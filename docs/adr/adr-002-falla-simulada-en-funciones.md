@@ -4,7 +4,7 @@
 |-------|-------|
 | Date | 2026-10-25 |
 | Ticket | FEAT-001a |
-| Status | Accepted |
+| Status | Accepted — precisado por ADR-003 |
 
 ## Context
 RNF-05 y AC-57 de `prd-FEAT-001a.md` exigen probar que, si el alta falla después de guardar el
@@ -30,6 +30,10 @@ pruebas corren contra el proyecto de Supabase, no contra una base local.
 Option 1. La tabla `pruebas.BAT_FALLAS_SIMULADAS` vive en el esquema `pruebas`, que la API de Supabase
 no expone, sin permisos para `anon` ni `authenticated`: solo la service role (que tienen las pruebas
 y nunca la app) puede escribirla. En producción queda vacía.
+
+> **Precisado por ADR-003:** la tabla no la escribe la service role (que no tiene ningún permiso
+> sobre el esquema `pruebas`), sino la conexión directa de las pruebas como `postgres`, con TLS
+> verificado. Ningún rol de la API llega a la tabla.
 
 ## Consequences
 - `BASP_AGREGAR_MOVIMIENTO` consulta la tabla entre el INSERT y el UPDATE y lanza `BA500` si el
