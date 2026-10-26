@@ -92,6 +92,7 @@ Mayúsculas en la interfaz:
 - Funciones y métodos: PascalCase en español, con verbo al inicio. Ej.: `AgregarIngreso`, `AgregarGasto`, `EditarMovimiento`, `EliminarMovimiento`, `ObtenerSaldo`.
 - Componentes React: PascalCase en español. Ej.: `FormularioMovimiento`, `ListaMovimientos`.
 - Estado de React: el setter de `useState` también es una función en español: `const [saldo, EstablecerSaldo] = useState(0)`. Los manejadores de eventos empiezan con `Manejar` (`ManejarEnvio`) y las props de callback con `al` (`alGuardar`, `alCancelar`).
+- Hooks de React: `use` + PascalCase en español, porque React exige el prefijo `use` para reconocerlos. Ej.: `useSesion`, `useMensajes`.
 - Clases CSS: kebab-case en español (`lista-movimientos`, `mensaje-error`).
 - Variables y parámetros: camelCase en español. Ej.: `saldoActual`, `idCategoria`. Los identificadores llevan `id` al inicio.
 - Archivos: los de componentes, igual que el componente (`FormularioMovimiento.jsx`); el resto, en camelCase (`clienteSupabase.js`, `movimientos.test.js`).

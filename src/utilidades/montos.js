@@ -2,12 +2,15 @@
 // ni se hacen cuentas con ellos. La API entrega y recibe "N.NN"; el campo de
 // la interfaz usa el formato argentino "1.500,50".
 
+import { mensajeMontoMayorACero, mensajeMontoMaximo } from '../mensajes/textos.js';
+
 const expresionMontoApi = /^(-?)(\d+)(?:\.(\d{1,2}))?$/;
 const maximoDigitosEnteros = 13;
 const digitosEnterosMontoMaximo = 12;
 
-export const mensajeMontoMayorACero = 'El monto debe ser mayor a 0.';
-export const mensajeMontoMaximo = 'El monto máximo es 999.999.999.999,99.';
+// Los textos viven en src/mensajes/textos.js; se reexportan para quien ya los
+// importaba desde aquí.
+export { mensajeMontoMayorACero, mensajeMontoMaximo };
 
 // Agrupa de a tres desde el final en tiempo lineal: el saldo no tiene límite
 // de dígitos (NFR-03).
