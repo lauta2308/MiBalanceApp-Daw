@@ -1,9 +1,12 @@
 import { Route, Routes } from 'react-router';
 import { ProveedorMensajes } from './mensajes/ProveedorMensajes.jsx';
+import { SeccionCuenta } from './paginas/SeccionCuenta.jsx';
 import { ProveedorSesion } from './sesion/ProveedorSesion.jsx';
 
-// Esqueleto de rutas. Las páginas reales se incorporan en los bloques siguientes:
-// la sección Cuenta en "/" y los formularios de alta en "/gasto/nuevo" e "/ingreso/nuevo".
+// La sección Cuenta vive en "/". Los formularios de alta ("/gasto/nuevo" e
+// "/ingreso/nuevo") se incorporan en el bloque siguiente; al volver de un alta
+// exitosa navegan a "/" con el estado { pagina: 1 } y, como la sección Cuenta se
+// vuelve a montar, muestra la página 1 (FR-42).
 // Sin sesión iniciada no se renderiza ninguna ruta (FR-02).
 function App() {
   return (
@@ -11,7 +14,7 @@ function App() {
       <ProveedorSesion>
         <ProveedorMensajes>
           <Routes>
-            <Route path="/" element={<h1>Mi Cuenta</h1>} />
+            <Route path="/" element={<SeccionCuenta />} />
             <Route path="/gasto/nuevo" element={<h1>Añadir Gasto</h1>} />
             <Route path="/ingreso/nuevo" element={<h1>Añadir Ingreso</h1>} />
           </Routes>

@@ -122,3 +122,124 @@ body {
   margin: 2rem 0;
   text-align: center;
 }
+
+/* Sección Cuenta (FR-06 a FR-08, FR-35 a FR-41). Unidades relativas, filas con
+   flex-wrap y montos que cortan en cualquier punto para no desbordar en 320 px
+   (NFR-05). */
+.encabezado-cuenta {
+  margin-bottom: 1rem;
+}
+
+.nombre-cuenta {
+  margin: 0;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.saldo {
+  margin: 0.25rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.saldo-positivo {
+  color: var(--color-verde);
+}
+
+.saldo-negativo {
+  color: var(--color-rojo);
+}
+
+.saldo-cero {
+  color: var(--color-texto);
+}
+
+.acciones-cuenta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.boton-accion,
+.boton-paginacion {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  color: var(--color-fondo);
+  background-color: var(--color-texto);
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.boton-paginacion:disabled {
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+  border: 1px solid var(--color-texto);
+  cursor: not-allowed;
+}
+
+.lista-vacia {
+  margin: 2rem 0;
+  text-align: center;
+}
+
+.grupo-movimientos + .grupo-movimientos {
+  margin-top: 1rem;
+}
+
+.fecha-grupo {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.filas-movimientos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fila-movimiento {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid currentColor;
+}
+
+.categoria-movimiento {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.monto-movimiento {
+  margin-left: auto;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.monto-gasto {
+  color: var(--color-rojo);
+}
+
+.monto-ingreso {
+  color: var(--color-verde);
+}
+
+.paginacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.indicador-pagina {
+  margin: 0;
+}
