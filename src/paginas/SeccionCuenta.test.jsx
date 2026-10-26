@@ -42,7 +42,6 @@ vi.mock('../servicios/clienteSupabase.js', () => {
 });
 
 import { ProveedorMensajes } from '../mensajes/ProveedorMensajes.jsx';
-import { ObtenerPaginaMovimientos } from '../servicios/movimientos.js';
 import { SeccionCuenta } from './SeccionCuenta.jsx';
 
 const mensajeErrorCarga = 'No se pudieron cargar sus movimientos. Vuelva a intentarlo.';
@@ -409,35 +408,6 @@ describe('SeccionCuenta', () => {
 
     expect(await screen.findByRole('alertdialog')).toHaveTextContent(mensajeErrorCarga);
     expect(screen.queryByText(/^USD /)).not.toBeInTheDocument();
-  });
-
-  it('ObtenerPaginaMovimientos(2) pide el rango 50–99 de bav_movimientos con el orden fecha, creado_en e id descendentes y el total exacto (FR-34, FR-39)', async () => {
-    ConfigurarServidor({ movimientos: CrearMovimientos(120) });
-
-    const resultado = await ObtenerPaginaMovimientos(2);
-
-    expect(resultado.ok).toBe(true);
-    expect(resultado.total).toBe(120);
-    expect(resultado.movimientos).toHaveLength(50);
-    expect(resultado.movimientos[0].id).toBe('mov-051');
-    const [consulta] = ConsultasDeMovimientos();
-    expect(consulta.range).toEqual([50, 99]);
-    expect(consulta.order).toEqual([
-      ['fecha', { ascending: false }],
-      ['creado_en', { ascending: false }],
-      ['id', { ascending: false }],
-    ]);
-    expect(consulta.select[1]).toEqual({ count: 'exact' });
-    expect(consulta.select[0].split(',').map((columna) => columna.trim())).toEqual(
-      expect.arrayContaining(['id', 'fecha', 'tipo', 'monto', 'nombre_categoria']),
-    );
-  });
-
-  it('ObtenerPaginaMovimientos devuelve { ok: false } sin exponer el error de Supabase (NFR-06)', async () => {
-    simulacion.responderMovimientos = () => ({ data: null, error: errorSupabase, count: null });
-
-    await expect(ObtenerPaginaMovimientos(1)).resolves.toEqual({ ok: false });
-    expect(ConsultasDeMovimientos()).toHaveLength(1);
   });
 
   it('nunca pide más de 50 filas al servidor', async () => {

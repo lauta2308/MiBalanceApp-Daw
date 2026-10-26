@@ -243,3 +243,146 @@ body {
 .indicador-pagina {
   margin: 0;
 }
+
+/* Formulario de alta (FR-12 a FR-33, FR-48). Mismas reglas responsive que la
+   sección Cuenta: unidades relativas y sin anchos fijos (NFR-05). */
+.encabezado-formulario {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.titulo-formulario {
+  margin: 0;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.flecha-volver {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+  border: 1px solid var(--color-texto);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.flecha-volver:disabled {
+  cursor: not-allowed;
+}
+
+.icono-flecha {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.campos-formulario {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.campo-formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.etiqueta-campo {
+  font-weight: 700;
+}
+
+.entrada-campo {
+  width: 100%;
+  min-width: 0;
+  padding: 0.5rem;
+  font: inherit;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+  border: 1px solid var(--color-texto);
+  border-radius: 0.25rem;
+}
+
+.campo-fecha {
+  text-align: left;
+  cursor: pointer;
+}
+
+.entrada-campo:disabled {
+  cursor: not-allowed;
+}
+
+.acciones-formulario {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.boton-accion:disabled,
+.boton-accion[aria-disabled='true'] {
+  cursor: not-allowed;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+  border: 1px solid var(--color-texto);
+}
+
+.boton-secundario {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+  border: 1px solid var(--color-texto);
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.boton-secundario:disabled {
+  cursor: not-allowed;
+}
+
+/* Calendario (react-day-picker): colores de la paleta (NFR-08) y celdas que
+   entran en 320 px (7 × 2,375rem) sin desplazamiento horizontal (NFR-05). */
+.calendario {
+  max-width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  overflow-x: auto;
+  background-color: var(--color-fondo);
+  border: 1px solid var(--color-texto);
+  border-radius: 0.5rem;
+}
+
+.calendario .rdp-root {
+  --rdp-accent-color: var(--color-texto);
+  --rdp-today-color: var(--color-texto);
+  --rdp-day-height: 2.375rem;
+  --rdp-day-width: 2.375rem;
+  --rdp-day_button-height: 2.25rem;
+  --rdp-day_button-width: 2.25rem;
+  --rdp-weekday-opacity: 1;
+  --rdp-outside-opacity: 1;
+}
+
+.calendario .rdp-today:not(.rdp-outside) {
+  font-weight: 700;
+}
+
+/* Las listas de mes y año son <select> transparentes sobre su etiqueta: el foco
+   visible se dibuja en la etiqueta, con el mismo contorno que el resto (NFR-07). */
+.calendario .rdp-dropdown:focus-visible ~ .rdp-caption_label {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}

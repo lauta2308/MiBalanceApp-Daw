@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OrdenarCategorias } from './categorias.js';
+import { ObtenerCategoriaPorDefecto, OrdenarCategorias } from './categorias.js';
 
 describe('OrdenarCategorias', () => {
   it('pone la categoría por defecto primero y el resto en orden alfabético sin distinguir mayúsculas (AC-26)', () => {
@@ -39,5 +39,27 @@ describe('OrdenarCategorias', () => {
       'nafta',
       'Ómnibus',
     ]);
+  });
+});
+
+describe('ObtenerCategoriaPorDefecto', () => {
+  it('devuelve el id de la categoría por defecto aunque no sea la primera (FR-18)', () => {
+    const lista = [
+      { id: 'cat-ahorro', nombre: 'Ahorro', es_por_defecto: false },
+      { id: 'cat-pago-realizado', nombre: 'Pago Realizado', es_por_defecto: true },
+    ];
+    expect(ObtenerCategoriaPorDefecto(lista)).toBe('cat-pago-realizado');
+  });
+
+  it('sin una categoría por defecto devuelve el id de la primera (FR-15: siempre hay una elegida)', () => {
+    const lista = [
+      { id: 'cat-mercado', nombre: 'Mercado', es_por_defecto: false },
+      { id: 'cat-transporte', nombre: 'Transporte', es_por_defecto: false },
+    ];
+    expect(ObtenerCategoriaPorDefecto(lista)).toBe('cat-mercado');
+  });
+
+  it('con la lista vacía devuelve null en lugar de fallar', () => {
+    expect(ObtenerCategoriaPorDefecto([])).toBeNull();
   });
 });
