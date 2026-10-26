@@ -807,6 +807,46 @@ describe('FormularioMovimiento', () => {
     );
   });
 
+  // Al volver a Cuenta desde el formulario, Cuenta se monta de nuevo: el foco no
+  // puede quedar en <body>, sino en el botón desde el que se abrió (NFR-07, AC-61).
+  describe('foco al volver a Cuenta (NFR-07, AC-61)', () => {
+    it.each([
+      ['Añadir Gasto', mensajeGasto],
+      ['Añadir Ingreso', mensajeIngreso],
+    ])('tras guardar desde "%s", el foco vuelve a ese botón y "%s" se anuncia en la región viva', async (nombreBoton, mensaje) => {
+      RenderizarApp();
+      await EsperarCuenta();
+      await AbrirFormulario(nombreBoton);
+      EscribirMonto('500');
+      Guardar();
+
+      expect(await screen.findByText(mensaje)).toBeInTheDocument();
+      await EsperarCuenta();
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: nombreBoton })),
+      );
+      expect(screen.getByRole('status')).toHaveTextContent(mensaje);
+    });
+
+    it.each([
+      ['Añadir Gasto', 'Cancelar'],
+      ['Añadir Ingreso', 'Cancelar'],
+      ['Añadir Gasto', 'Volver atrás'],
+      ['Añadir Ingreso', 'Volver atrás'],
+    ])('tras salir de "%s" con "%s", el foco queda en el botón que lo abrió', async (nombreBoton, salida) => {
+      RenderizarApp();
+      await EsperarCuenta();
+      await AbrirFormulario(nombreBoton);
+
+      fireEvent.click(screen.getByRole('button', { name: salida }));
+
+      await EsperarCuenta();
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: nombreBoton })),
+      );
+    });
+  });
+
   it('(AC-60, NFR-06) con fallas simuladas en el inicio de sesión, la carga y el alta, ningún texto mostrado tiene códigos ni trazas', async () => {
     // Inicio de sesión.
     servidor.fallar.sesion = true;

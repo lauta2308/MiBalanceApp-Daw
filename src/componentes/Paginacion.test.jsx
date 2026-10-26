@@ -132,6 +132,45 @@ describe('Paginacion', () => {
     expect(ObtenerBoton('Anterior')).not.toHaveAttribute('disabled');
   });
 
+  it.each([
+    ['Siguiente', 2, 3, 'Anterior'],
+    ['Anterior', 2, 1, 'Siguiente'],
+  ])('si "%s" tiene el foco y al llegar al extremo queda deshabilitado, el foco pasa al otro botón (NFR-07)', (nombre, desde, hasta, otro) => {
+    const propiedades = { total: 120, tamanoPagina, alAnterior: vi.fn(), alSiguiente: vi.fn() };
+    const { rerender } = render(<Paginacion {...propiedades} numeroPagina={desde} />);
+    ObtenerBoton(nombre).focus();
+    fireEvent.click(ObtenerBoton(nombre));
+
+    // Mientras carga conserva el foco; al llegar la página del extremo se deshabilita.
+    rerender(<Paginacion {...propiedades} numeroPagina={desde} deshabilitada />);
+    expect(document.activeElement).toBe(ObtenerBoton(nombre));
+    rerender(<Paginacion {...propiedades} numeroPagina={hasta} />);
+
+    expect(ObtenerBoton(nombre)).toBeDisabled();
+    expect(document.activeElement).toBe(ObtenerBoton(otro));
+  });
+
+  it('si el foco está fuera de la paginación al llegar al extremo, no lo mueve (NFR-07)', () => {
+    const propiedades = { total: 120, tamanoPagina, alAnterior: vi.fn(), alSiguiente: vi.fn() };
+    const { rerender } = render(
+      <>
+        <button type="button">Afuera</button>
+        <Paginacion {...propiedades} numeroPagina={2} />
+      </>,
+    );
+    ObtenerBoton('Siguiente').focus();
+    fireEvent.click(ObtenerBoton('Siguiente'));
+    ObtenerBoton('Afuera').focus();
+    rerender(
+      <>
+        <button type="button">Afuera</button>
+        <Paginacion {...propiedades} numeroPagina={3} />
+      </>,
+    );
+
+    expect(document.activeElement).toBe(ObtenerBoton('Afuera'));
+  });
+
   it('calcula las páginas con el tamaño que recibe por prop (tamanoPagina)', () => {
     render(
       <Paginacion

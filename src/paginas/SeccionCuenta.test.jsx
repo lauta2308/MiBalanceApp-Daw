@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 
 // Cliente de Supabase simulado: cada consulta registra lo que se le pidió
 // (tabla, select, order, range) y responde con lo que indique la prueba.
@@ -88,6 +88,49 @@ function RenderizarSeccion() {
           <Route path="/" element={<SeccionCuenta />} />
           <Route path="/gasto/nuevo" element={<h1>Pantalla Añadir Gasto</h1>} />
           <Route path="/ingreso/nuevo" element={<h1>Pantalla Añadir Ingreso</h1>} />
+        </Routes>
+      </ProveedorMensajes>
+    </MemoryRouter>,
+  );
+}
+
+// Muestra el estado de la navegación actual, para comprobar que Cuenta lo limpia.
+function EstadoNavegacion() {
+  const ubicacion = useLocation();
+  return <output aria-label="Estado de la navegación">{JSON.stringify(ubicacion.state)}</output>;
+}
+
+// Pantalla de formulario simulada con un botón que vuelve con "atrás" del historial.
+function PantallaConAtras({ titulo }) {
+  const navegar = useNavigate();
+  return (
+    <>
+      <h1>{titulo}</h1>
+      <button type="button" onClick={() => navegar(-1)}>
+        Atrás del Historial
+      </button>
+    </>
+  );
+}
+
+// Cuenta montada como si se volviera de un formulario: la entrada "/" trae
+// { tipoFormulario } en el estado de la navegación.
+function RenderizarSeccionDesdeFormulario(tipoFormulario) {
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/', state: { pagina: 1, tipoFormulario } }]}>
+      <ProveedorMensajes>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <>
+                <SeccionCuenta />
+                <EstadoNavegacion />
+              </>
+            }
+          />
+          <Route path="/gasto/nuevo" element={<PantallaConAtras titulo="Pantalla Añadir Gasto" />} />
+          <Route path="/ingreso/nuevo" element={<PantallaConAtras titulo="Pantalla Añadir Ingreso" />} />
         </Routes>
       </ProveedorMensajes>
     </MemoryRouter>,
@@ -285,6 +328,31 @@ describe('SeccionCuenta', () => {
     expect(ConsultasDeMovimientos()).toHaveLength(2);
   });
 
+  it('con "Siguiente" hasta la última página el foco pasa a "Anterior", y con "Anterior" hasta la primera vuelve a "Siguiente" (NFR-07)', async () => {
+    ConfigurarServidor({ movimientos: CrearMovimientos(120) });
+    RenderizarSeccion();
+    await screen.findByText('Página 1 de 3');
+
+    async function Presionar(nombre, textoEsperado) {
+      const boton = screen.getByRole('button', { name: nombre });
+      boton.focus();
+      fireEvent.click(boton);
+      await screen.findByText(textoEsperado);
+    }
+
+    await Presionar('Siguiente', 'Página 2 de 3');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Siguiente' }));
+    await Presionar('Siguiente', 'Página 3 de 3');
+    expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Anterior' }));
+
+    await Presionar('Anterior', 'Página 2 de 3');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Anterior' }));
+    await Presionar('Anterior', 'Página 1 de 3');
+    expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Siguiente' }));
+  });
+
   it('con total 30 muestra las 30 filas sin "Anterior", "Siguiente" ni el indicador (AC-43)', async () => {
     ConfigurarServidor({ movimientos: CrearMovimientos(30) });
     RenderizarSeccion();
@@ -349,6 +417,41 @@ describe('SeccionCuenta', () => {
 
     await usuario.click(screen.getByRole('button', { name: 'Añadir Gasto' }));
     expect(await screen.findByRole('heading', { name: 'Pantalla Añadir Gasto' })).toBeInTheDocument();
+  });
+
+  it('al montarse por primera vez (sin venir de un formulario) no fuerza el foco en ningún botón (NFR-07)', async () => {
+    RenderizarSeccion();
+    await screen.findByRole('heading', { name: 'Mi Cuenta (USD)' });
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it.each([
+    ['GASTO', 'Añadir Gasto'],
+    ['INGRESO', 'Añadir Ingreso'],
+  ])('al volver de un formulario %s enfoca "%s" y limpia tipoFormulario del estado de la navegación, para que una recarga no vuelva a forzar el foco (NFR-07)', async (tipoFormulario, nombreBoton) => {
+    RenderizarSeccionDesdeFormulario(tipoFormulario);
+    await screen.findByRole('heading', { name: 'Mi Cuenta (USD)' });
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: nombreBoton }));
+    await vi.waitFor(() =>
+      expect(screen.getByLabelText('Estado de la navegación').textContent).not.toMatch(/tipoFormulario/),
+    );
+  });
+
+  it('al volver a Cuenta con "atrás" del historial a la entrada que trajo tipoFormulario, no fuerza el foco (NFR-07)', async () => {
+    RenderizarSeccionDesdeFormulario('GASTO');
+    await screen.findByRole('heading', { name: 'Mi Cuenta (USD)' });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Añadir Gasto' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Añadir Ingreso' }));
+    await screen.findByRole('heading', { name: 'Pantalla Añadir Ingreso' });
+    document.activeElement.blur();
+    fireEvent.click(screen.getByRole('button', { name: 'Atrás del Historial' }));
+
+    await screen.findByRole('heading', { name: 'Mi Cuenta (USD)' });
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Añadir Gasto' }));
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('"Añadir Ingreso" abre el formulario de ingreso', async () => {

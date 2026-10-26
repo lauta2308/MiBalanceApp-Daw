@@ -74,8 +74,9 @@ export function FormularioMovimiento({ tipo }) {
     };
   }, [tipo, intentoCarga, MostrarError]);
 
+  // Cuenta enfoca el botón desde el que se abrió este formulario (NFR-07).
   function VolverACuenta() {
-    navegar('/');
+    navegar('/', { state: { tipoFormulario: tipo } });
   }
 
   async function ManejarEnvio(evento) {
@@ -108,7 +109,7 @@ export function FormularioMovimiento({ tipo }) {
       return;
     }
     if (resultado.ok) {
-      navegar('/', { state: { pagina: 1 } });
+      navegar('/', { state: { pagina: 1, tipoFormulario: tipo } });
       return;
     }
 

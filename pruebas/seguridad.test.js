@@ -328,5 +328,11 @@ describe('aislamiento entre usuarios', { timeout: 60000 }, () => {
               has_table_privilege('service_role', 'pruebas.bat_fallas_simuladas', 'SELECT, INSERT, UPDATE, DELETE') AS tabla`,
     );
     expect(pruebas).toEqual({ usa_esquema: false, tabla: false });
+
+    const funciones = await ConsultarBaseDatos(
+      `SELECT has_function_privilege('service_role', 'public.batf_crear_cuenta_usuario()', 'EXECUTE') AS crear_cuenta,
+              has_function_privilege('service_role', 'public.basp_agregar_movimiento(text, numeric, uuid, date)', 'EXECUTE') AS agregar_movimiento`,
+    );
+    expect(funciones).toEqual([{ crear_cuenta: false, agregar_movimiento: false }]);
   });
 });

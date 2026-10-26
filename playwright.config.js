@@ -1,24 +1,25 @@
-import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 import { loadEnv } from 'vite';
 
-// Variables de las pruebas en navegador. SUPABASE_SERVICE_ROLE_KEY se separa y
-// no se copia a process.env: así el servidor de desarrollo que levanta
-// webServer (que hereda process.env) nunca recibe la clave secreta. La
-// configuración global y los fixtures la leen por su cuenta con loadEnv.
-const variablesPruebas = loadEnv('pruebas', process.cwd(), '');
-delete variablesPruebas.SUPABASE_SERVICE_ROLE_KEY;
-Object.assign(process.env, variablesPruebas);
+// Solo las variables VITE_* (las que necesita la app) se copian a process.env,
+// que hereda el servidor de desarrollo de webServer. Las demás de
+// .env.pruebas.local (SUPABASE_SERVICE_ROLE_KEY, SUPABASE_DB_PASSWORD) nunca
+// llegan a `npm run dev`: la configuración global y los fixtures las leen por
+// su cuenta con loadEnv. Si la clave de service role ya estuviera en el entorno
+// del proceso, también se quita.
+Object.assign(process.env, loadEnv('pruebas', process.cwd(), 'VITE_'));
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const rutaConfiguracionGlobal = './pruebas-navegador/configuracionGlobal.js';
 const puertoDesarrollo = 5173;
 
 export default defineConfig({
   testDir: 'pruebas-navegador',
-  // La configuración global se agrega con las pruebas en navegador; mientras no
-  // exista, Playwright corre sin ella.
-  globalSetup: existsSync(rutaConfiguracionGlobal) ? rutaConfiguracionGlobal : undefined,
+  // Las pruebas de un mismo archivo corren en serie: anchos.spec.js y
+  // accesibilidad.spec.js comparten un usuario por archivo y cada prueba
+  // reemplaza sus movimientos, así que en paralelo se pisarían los datos.
+  fullyParallel: false,
+  // Prepara los usuarios de prueba y sus sesiones antes de correr las pruebas.
+  globalSetup: './pruebas-navegador/configuracionGlobal.js',
   use: {
     baseURL: `http://localhost:${puertoDesarrollo}`,
     trace: 'on-first-retry',

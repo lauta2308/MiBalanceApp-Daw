@@ -292,7 +292,9 @@ REVOKE ALL ON SCHEMA pruebas FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON pruebas.BAT_FALLAS_SIMULADAS FROM PUBLIC, anon, authenticated, service_role;
 
 -- Funciones: la de trigger no la ejecuta nadie desde la API; el alta solo usuarios autenticados.
-REVOKE EXECUTE ON FUNCTION public.BATF_CREAR_CUENTA_USUARIO() FROM PUBLIC, anon, authenticated;
+-- service_role tampoco las ejecuta (R10): las pruebas no las llaman con la service role.
+REVOKE EXECUTE ON FUNCTION public.BATF_CREAR_CUENTA_USUARIO()
+  FROM PUBLIC, anon, authenticated, service_role;
 REVOKE EXECUTE ON FUNCTION public.BASP_AGREGAR_MOVIMIENTO(text, numeric, uuid, date)
-  FROM PUBLIC, anon, authenticated;
+  FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.BASP_AGREGAR_MOVIMIENTO(text, numeric, uuid, date) TO authenticated;

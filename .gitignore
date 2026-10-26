@@ -14,6 +14,8 @@ node_modules/
 dist/
 test-results/
 playwright-report/
+# Sesiones guardadas de las pruebas en navegador (tienen tokens)
+pruebas-navegador/.sesiones/
 __pycache__/
 
 # Variables de entorno locales (nunca se commitean)

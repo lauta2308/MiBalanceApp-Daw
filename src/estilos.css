@@ -376,6 +376,19 @@ body {
   --rdp-outside-opacity: 1;
 }
 
+/* Cabecera: las listas de mes y año van a la izquierda y las flechas, a la
+   derecha, sobre el mismo ancho que la grilla. Con el texto a 1rem y menos
+   espacio entre las listas, "septiembre 2026" entra junto a las flechas sin
+   superponerse en 320 px (NFR-05); el margen derecho reserva su lugar. */
+.calendario .rdp-month_caption {
+  margin-inline-end: calc(2 * var(--rdp-nav_button-width));
+  font-size: 1rem;
+}
+
+.calendario .rdp-dropdowns {
+  --rdp-dropdown-gap: 0.25rem;
+}
+
 .calendario .rdp-today:not(.rdp-outside) {
   font-weight: 700;
 }

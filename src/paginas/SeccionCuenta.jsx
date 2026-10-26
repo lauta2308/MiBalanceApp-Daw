@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { EncabezadoCuenta } from '../componentes/EncabezadoCuenta.jsx';
 import { ListaMovimientos } from '../componentes/ListaMovimientos.jsx';
 import { Paginacion } from '../componentes/Paginacion.jsx';
@@ -12,14 +12,43 @@ import { ObtenerPaginaMovimientos, tamanoPaginaMovimientos } from '../servicios/
 // accesos a los formularios de alta. No tiene flecha para volver atrás (FR-32).
 // Cada carga pide la cuenta y una sola página de 50 movimientos; mientras llega
 // una página nueva se sigue mostrando la anterior, con su propio número.
+// Al volver de un formulario de alta (que indica su tipo en el estado de la
+// navegación), el foco queda en el botón que lo abrió, en lugar de perderse en
+// <body> al montarse de nuevo (NFR-07). La primera vez no se fuerza el foco.
 export function SeccionCuenta() {
   const navegar = useNavigate();
+  const ubicacion = useLocation();
+  const botonGasto = useRef(null);
+  const botonIngreso = useRef(null);
   const { MostrarError } = useMensajes();
   const [numeroPagina, EstablecerNumeroPagina] = useState(1);
   const [intentoCarga, EstablecerIntentoCarga] = useState(0);
   const [cargando, EstablecerCargando] = useState(true);
   const [cuenta, EstablecerCuenta] = useState(null);
   const [pagina, EstablecerPagina] = useState(null);
+
+  // Tipo del formulario del que se volvió y el resto del estado de la
+  // navegación, leídos una sola vez al montarse.
+  const [{ tipoFormularioOrigen, restoEstado }] = useState(() => {
+    const { tipoFormulario = null, ...resto } = ubicacion.state ?? {};
+    return {
+      tipoFormularioOrigen: tipoFormulario,
+      restoEstado: Object.keys(resto).length > 0 ? resto : null,
+    };
+  });
+
+  // Tras enfocar el botón de origen, se quita tipoFormulario del estado de la
+  // navegación (reemplazando la entrada del historial): si no, una recarga o
+  // volver con atrás/adelante a esta entrada forzaría el foco otra vez, en
+  // lugar de comportarse como la primera carga.
+  useEffect(() => {
+    const botonOrigen = { GASTO: botonGasto, INGRESO: botonIngreso }[tipoFormularioOrigen];
+    if (!botonOrigen) {
+      return;
+    }
+    botonOrigen.current?.focus();
+    navegar('.', { replace: true, state: restoEstado });
+  }, [tipoFormularioOrigen, restoEstado, navegar]);
 
   useEffect(() => {
     let vigente = true;
@@ -62,10 +91,20 @@ export function SeccionCuenta() {
     <section className="seccion-cuenta">
       {cuenta && <EncabezadoCuenta cuenta={cuenta} />}
       <div className="acciones-cuenta">
-        <button type="button" className="boton-accion" onClick={() => navegar('/gasto/nuevo')}>
+        <button
+          ref={botonGasto}
+          type="button"
+          className="boton-accion"
+          onClick={() => navegar('/gasto/nuevo')}
+        >
           Añadir Gasto
         </button>
-        <button type="button" className="boton-accion" onClick={() => navegar('/ingreso/nuevo')}>
+        <button
+          ref={botonIngreso}
+          type="button"
+          className="boton-accion"
+          onClick={() => navegar('/ingreso/nuevo')}
+        >
           Añadir Ingreso
         </button>
       </div>
