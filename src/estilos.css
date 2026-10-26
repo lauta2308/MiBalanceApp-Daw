@@ -1,0 +1,42 @@
+/* Paleta con contraste verificado (NFR-08): texto #1a1a1a sobre #ffffff;
+   verde #1b6e3a y rojo #b3261e, ambos con contraste >= 4,5:1 sobre blanco. */
+:root {
+  --color-texto: #1a1a1a;
+  --color-fondo: #ffffff;
+  --color-verde: #1b6e3a;
+  --color-rojo: #b3261e;
+  --color-foco: #1a1a1a;
+  --ancho-maximo-contenedor: 40rem;
+
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+}
+
+/* Foco visible en todos los elementos al navegar con teclado (NFR-07). */
+:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+/* Contenedor responsive (NFR-05): unidades relativas y ancho máximo, sin anchos fijos. */
+.contenedor {
+  width: 100%;
+  max-width: var(--ancho-maximo-contenedor);
+  margin: 0 auto;
+  padding: 1rem;
+}

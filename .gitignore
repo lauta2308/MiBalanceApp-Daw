@@ -8,3 +8,14 @@
 .daw-sessions/
 .daw-journal.jsonl
 # END DAW
+
+# Dependencias, compilación y resultados de pruebas
+node_modules/
+dist/
+test-results/
+playwright-report/
+__pycache__/
+
+# Variables de entorno locales (nunca se commitean)
+.env
+.env*.local
