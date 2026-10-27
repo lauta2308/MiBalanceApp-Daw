@@ -73,4 +73,8 @@ describe('ConvertirTextoAFecha y ConvertirFechaATexto', () => {
     expect(() => ConvertirTextoAFecha('17/09/2026')).toThrow('Fecha inválida');
     expect(() => ConvertirTextoAFecha('2026-02-30')).toThrow('Fecha inválida');
   });
+
+  it('ConvertirFechaATexto lanza RangeError con una fecha inválida', () => {
+    expect(() => ConvertirFechaATexto(new Date(NaN))).toThrow(RangeError);
+  });
 });

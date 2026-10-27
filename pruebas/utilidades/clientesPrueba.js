@@ -233,3 +233,12 @@ export async function DesactivarFallaSimulada(idUsuario) {
     idUsuario,
   ]);
 }
+
+// Borra una categoría de prueba por la conexión directa: service_role no tiene DELETE sobre
+// BAT_CATEGORIAS (ADR-003).
+export async function EliminarCategoriaPrueba(idCategoria, idCuenta) {
+  await ConsultarBaseDatos('DELETE FROM public.bat_categorias WHERE id = $1 AND id_cuenta = $2', [
+    idCategoria,
+    idCuenta,
+  ]);
+}

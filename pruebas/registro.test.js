@@ -7,6 +7,7 @@ import {
   ConsultarBaseDatos,
   CrearClienteAdministrador,
   CrearUsuarioPrueba,
+  EliminarCategoriaPrueba,
   EliminarUsuariosPrueba,
   ObtenerCuentaUsuario,
   CerrarConexionesBaseDatos,
@@ -110,22 +111,28 @@ describe('registro de un usuario nuevo', { timeout: 60000 }, () => {
     const cuenta = await ObtenerCuentaUsuario(usuario.idUsuario);
     const idMercado = await CargarCategoria(cuenta.id, 'Mercado', 'GASTO');
 
-    const crear = await usuario.cliente
-      .from('bat_categorias')
-      .insert({ id_cuenta: cuenta.id, nombre: 'Viajes', tipo: 'GASTO' });
-    expect(crear.error?.code).toBe('42501');
+    // "Mercado" se borra al terminar para que AC-07 y AC-09, que esperan solo las 2 categorías
+    // por defecto, no dependan del orden en que corren las pruebas.
+    try {
+      const crear = await usuario.cliente
+        .from('bat_categorias')
+        .insert({ id_cuenta: cuenta.id, nombre: 'Viajes', tipo: 'GASTO' });
+      expect(crear.error?.code).toBe('42501');
 
-    const renombrar = await usuario.cliente
-      .from('bat_categorias')
-      .update({ nombre: 'Otra' })
-      .eq('id', idMercado);
-    expect(renombrar.error?.code).toBe('42501');
+      const renombrar = await usuario.cliente
+        .from('bat_categorias')
+        .update({ nombre: 'Otra' })
+        .eq('id', idMercado);
+      expect(renombrar.error?.code).toBe('42501');
 
-    const eliminar = await usuario.cliente.from('bat_categorias').delete().eq('id', idMercado);
-    expect(eliminar.error?.code).toBe('42501');
+      const eliminar = await usuario.cliente.from('bat_categorias').delete().eq('id', idMercado);
+      expect(eliminar.error?.code).toBe('42501');
 
-    const nombres = (await LeerCategoriasComoAdministrador(cuenta.id)).map((c) => c.nombre);
-    expect(nombres).toEqual(['Mercado', 'Pago Ingresado', 'Pago Realizado']);
+      const nombres = (await LeerCategoriasComoAdministrador(cuenta.id)).map((c) => c.nombre);
+      expect(nombres).toEqual(['Mercado', 'Pago Ingresado', 'Pago Realizado']);
+    } finally {
+      await EliminarCategoriaPrueba(idMercado, cuenta.id);
+    }
   });
 
   it('rechaza cambiar el nombre, la moneda y el saldo de la cuenta (AC-69)', async () => {

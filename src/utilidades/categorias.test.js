@@ -40,6 +40,10 @@ describe('OrdenarCategorias', () => {
       'Ómnibus',
     ]);
   });
+
+  it('con la lista vacía devuelve una lista vacía', () => {
+    expect(OrdenarCategorias([])).toEqual([]);
+  });
 });
 
 describe('ObtenerCategoriaPorDefecto', () => {

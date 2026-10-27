@@ -8,10 +8,6 @@ const expresionMontoApi = /^(-?)(\d+)(?:\.(\d{1,2}))?$/;
 const maximoDigitosEnteros = 13;
 const digitosEnterosMontoMaximo = 12;
 
-// Los textos viven en src/mensajes/textos.js; se reexportan para quien ya los
-// importaba desde aquí.
-export { mensajeMontoMayorACero, mensajeMontoMaximo };
-
 // Agrupa de a tres desde el final en tiempo lineal: el saldo no tiene límite
 // de dígitos (NFR-03).
 function AgregarSeparadorMiles(digitos) {

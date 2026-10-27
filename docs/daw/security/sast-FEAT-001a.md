@@ -62,3 +62,24 @@ con `has_function_privilege`.
 | FP-1 | `.claude/agents/daw-sec-auditor.md:121` | F-SAST-01 | Falso positivo | Claude (daw-security-sast) | 2026-10-26 | `JWT_SECRET = "dev-secret-key"` es un ejemplo en la documentación del agente auditor; no es una credencial | Ninguno necesario; revisar en el próximo SAST |
 | FP-2 | `src/sesion/ProveedorSesion.test.jsx:18` | F-SAST-01 | Falso positivo | Claude (daw-security-sast) | 2026-10-26 | `access_token: 'token-de-prueba'` es un dato ficticio de una prueba unitaria con Supabase simulado | Ninguno necesario; revisar en el próximo SAST |
 | I-1 | `pruebas-navegador/anchos.spec.js:184`, `pruebas-navegador/rendimiento.spec.js:93` | F-SAST-10 | Informativo, no bloquea | Claude (daw-security-sast) | 2026-10-26 | Los `console.log` imprimen solo medidas (px, ms); no incluyen tokens, claves ni datos personales. Son pruebas, no código de la app | Revisar si cambian los resúmenes; revisar en el próximo SAST |
+
+---
+
+## Ronda 2 — 2026-10-27 — loop correctivo desde VERIFY
+
+- **Alcance:** cambios del loop correctivo: `src/utilidades/montos.js` (se quita una
+  reexportación), pruebas nuevas en `src/utilidades/*.test.js` y `src/servicios/cuenta.test.js`,
+  `pruebas/registro.test.js` y `pruebas/utilidades/clientesPrueba.js` (`EliminarCategoriaPrueba`).
+- **Resultado:** ✅ PASSED — 0 críticas, 0 altas, 0 medias.
+
+| Regla | Verificación | Resultado |
+|---|---|---|
+| F-SAST-01 | Los valores de `SUPABASE_DB_PASSWORD` y `SUPABASE_SERVICE_ROLE_KEY` no aparecen en archivos versionados o por versionar. No hay patrones de clave, token, JWT ni cadenas de conexión en lo agregado | ✅ |
+| F-SAST-02 | `EliminarCategoriaPrueba` (`pruebas/utilidades/clientesPrueba.js`) ejecuta `DELETE … WHERE id = $1 AND id_cuenta = $2` con parámetros, sin interpolar. Las únicas plantillas `${…}` agregadas son datos de prueba de `montos.test.js` | ✅ |
+| F-SAST-03/04/06/17 | Sin `eval`, `innerHTML`, `child_process` ni `console.*` en lo agregado | ✅ |
+| F-SAST-13/16 | `npm audit`: `found 0 vulnerabilities` | ✅ |
+
+**Nota:** `EliminarCategoriaPrueba` usa la conexión directa como `postgres` (ADR-003), porque
+`service_role` no tiene `DELETE` sobre `BAT_CATEGORIAS`. Es código de prueba, no lo carga la app,
+y solo borra la fila que creó la prueba (Regla #0). No se le dio a `service_role` ningún permiso
+nuevo.

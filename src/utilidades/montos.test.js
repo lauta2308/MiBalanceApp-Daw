@@ -12,6 +12,18 @@ import {
 const mensajeMayorACero = 'El monto debe ser mayor a 0.';
 const mensajeMaximo = 'El monto máximo es 999.999.999.999,99.';
 
+// La menor de varias mediciones descarta las demoras ajenas a la función
+// (recolección de basura, compilación).
+function MedirDuracionMinima(funcion, repeticiones = 10) {
+  let duracionMinima = Infinity;
+  for (let indice = 0; indice < repeticiones; indice += 1) {
+    const inicio = performance.now();
+    funcion();
+    duracionMinima = Math.min(duracionMinima, performance.now() - inicio);
+  }
+  return duracionMinima;
+}
+
 describe('FormatearMonto', () => {
   it('formatea montos de la API con puntos de miles y coma decimal (AC-38, AC-56)', () => {
     expect(FormatearMonto('1500.00')).toBe('1.500,00');
@@ -39,9 +51,10 @@ describe('FormatearMonto', () => {
 
   it('agrupa de a tres una parte entera de 20.000 dígitos en tiempo lineal (NFR-03)', () => {
     const digitos = `1${'0'.repeat(19999)}`;
-    const inicio = performance.now();
+    const digitosChicos = `1${'0'.repeat(1999)}`;
     const formateado = FormatearMonto(`${digitos}.00`);
-    const duracion = performance.now() - inicio;
+    const duracion = MedirDuracionMinima(() => FormatearMonto(`${digitos}.00`));
+    const duracionChica = MedirDuracionMinima(() => FormatearMonto(`${digitosChicos}.00`));
     const [parteEntera, decimales] = formateado.split(',');
     const grupos = parteEntera.split('.');
     expect(decimales).toBe('00');
@@ -49,7 +62,9 @@ describe('FormatearMonto', () => {
     expect(grupos[0]).toBe('10');
     expect(grupos.slice(1).every((grupo) => grupo === '000')).toBe(true);
     expect(grupos.join('')).toBe(digitos);
-    expect(duracion).toBeLessThan(100);
+    // Con 10× más dígitos, lo lineal tarda ~10× más y lo cuadrático ~100×: el
+    // límite de 30× separa ambos sin depender de la velocidad de la máquina.
+    expect(duracion).toBeLessThan(duracionChica * 30);
   });
 
   it('lanza un error con un texto que no es un monto de la API', () => {
@@ -68,6 +83,11 @@ describe('FormatearMontoConSigno', () => {
     expect(() => FormatearMontoConSigno('-1500.00', 'GASTO')).toThrow('Monto inválido');
     expect(() => FormatearMontoConSigno('-0.00', 'INGRESO')).toThrow('Monto inválido');
   });
+
+  it('lanza "Tipo de movimiento inválido" con un tipo que no es GASTO ni INGRESO', () => {
+    expect(() => FormatearMontoConSigno('1500.00', 'OTRO')).toThrow('Tipo de movimiento inválido');
+    expect(() => FormatearMontoConSigno('1500.00', 'gasto')).toThrow('Tipo de movimiento inválido');
+  });
 });
 
 describe('FormatearSaldo', () => {
@@ -76,6 +96,11 @@ describe('FormatearSaldo', () => {
     expect(FormatearSaldo('-1000.00', 'USD')).toBe('USD -1.000,00');
     expect(FormatearSaldo('0.00', 'USD')).toBe('USD 0,00');
     expect(FormatearSaldo('-0.00', 'USD')).toBe('USD 0,00');
+  });
+
+  it('lanza "Monto inválido" con un texto que no es un monto de la API', () => {
+    expect(() => FormatearSaldo('abc', 'USD')).toThrow('Monto inválido');
+    expect(() => FormatearSaldo('1.500,00', 'USD')).toThrow('Monto inválido');
   });
 });
 
@@ -86,6 +111,12 @@ describe('ObtenerSignoSaldo', () => {
     expect(ObtenerSignoSaldo('0.00')).toBe('cero');
     expect(ObtenerSignoSaldo('-0.00')).toBe('cero');
     expect(ObtenerSignoSaldo('0.01')).toBe('positivo');
+  });
+
+  it('lanza "Monto inválido" con un texto que no es un monto de la API', () => {
+    for (const texto of ['abc', '', '1.500,00']) {
+      expect(() => ObtenerSignoSaldo(texto)).toThrow('Monto inválido');
+    }
   });
 });
 
@@ -133,6 +164,12 @@ describe('ConvertirMontoParaApi', () => {
     expect(ConvertirMontoParaApi('10,5')).toBe('10.50');
     expect(ConvertirMontoParaApi(',5')).toBe('0.50');
     expect(ConvertirMontoParaApi('999.999.999.999,99')).toBe('999999999999.99');
+  });
+
+  // No valida: el formulario llama antes a ValidarMonto, que rechaza estas entradas.
+  it('convierte un campo vacío o sin dígitos en "0.00" sin lanzar', () => {
+    expect(ConvertirMontoParaApi('')).toBe('0.00');
+    expect(ConvertirMontoParaApi('abc')).toBe('0.00');
   });
 });
 
