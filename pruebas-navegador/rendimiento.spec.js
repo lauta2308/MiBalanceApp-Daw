@@ -1,7 +1,8 @@
-// Rendimiento del alta (NFR-01, AC-50) y de la edición (FEAT-001b NFR-01, AC-22): 100 altas y 100
-// ediciones sobre una cuenta con 5.000 movimientos, en Chrome con la CPU ralentizada 4×. Cada
-// medición va desde el clic en "Guardar" hasta que la lista y el saldo se muestran actualizados;
-// el p95 debe ser menor a 2 s.
+// Rendimiento del alta (NFR-01, AC-50), de la edición (FEAT-001b NFR-01, AC-22) y de la
+// eliminación (FEAT-001c NFR-01, AC-09): 100 altas, 100 ediciones y 100 eliminaciones sobre una
+// cuenta con 5.000 movimientos, en Chrome con la CPU ralentizada 4×. Cada medición va desde el clic
+// en "Guardar" (o en "Confirmar", en la eliminación) hasta que la lista y el saldo se muestran
+// actualizados; el p95 debe ser menor a 2 s.
 
 import { cantidadMovimientosRendimiento } from './configuracionGlobal.js';
 import {
@@ -186,6 +187,73 @@ test(`${cantidadMediciones} ediciones sobre una cuenta de 5.000 movimientos, con
   await sesionCdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
 
   const p95 = InformarDuraciones(duraciones, 'AC-22, ediciones');
+
+  expect(duraciones).toHaveLength(cantidadMediciones);
+  expect(p95).toBeLessThan(limiteP95Ms);
+});
+
+test(`${cantidadMediciones} eliminaciones sobre una cuenta de 5.000 movimientos, con la CPU 4× más lenta, tienen p95 < 2 s (AC-09)`, async ({
+  paginaConUsuario: pagina,
+  usuario,
+}) => {
+  test.setTimeout(30 * 60_000);
+
+  // La cuenta tiene los 5.000 movimientos de la configuración global (más las altas y ediciones de
+  // las pruebas anteriores, si corrieron). Se elimina siempre el primer movimiento de la página 1.
+  let saldoCentavos = await LeerSaldoCentavos(usuario.idCuenta);
+  await pagina.goto('/');
+  await expect(pagina.getByText(/^Página 1 de \d+$/)).toBeVisible();
+  await expect(
+    pagina.getByText(`USD ${FormatearMontoPantalla(ConvertirCentavosAMonto(saldoCentavos))}`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  const sesionCdp = await pagina.context().newCDPSession(pagina);
+  await sesionCdp.send('Emulation.setCPUThrottlingRate', { rate: ralentizacionCpu });
+
+  const administrador = CrearClienteAdministrador();
+  const duraciones = [];
+  for (let indice = 0; indice < cantidadMediciones; indice += 1) {
+    // El tipo y el monto del primer movimiento se leen con la service role, fuera de la medición:
+    // el saldo baja en un ingreso y sube en un gasto.
+    const primeraFila = ObtenerFilas(pagina).first();
+    const idMovimiento = await primeraFila.getAttribute('data-id-movimiento');
+    const { data: movimiento, error } = await administrador
+      .from('bat_movimientos')
+      .select('tipo, monto::text')
+      .eq('id', idMovimiento)
+      .single();
+    expect(error).toBeNull();
+    const centavos = ConvertirMontoACentavos(movimiento.monto);
+    saldoCentavos += movimiento.tipo === 'INGRESO' ? -centavos : centavos;
+    const textoSaldo = `USD ${FormatearMontoPantalla(ConvertirCentavosAMonto(saldoCentavos))}`;
+
+    await ObtenerFilaPorId(pagina, idMovimiento).click();
+    await pagina.getByRole('menuitem', { name: 'Eliminar' }).click();
+    const botonConfirmar = pagina.getByRole('alertdialog').getByRole('button', { name: 'Confirmar' });
+    await expect(botonConfirmar).toBeVisible();
+
+    const inicio = performance.now();
+    await botonConfirmar.click();
+    // Lista y saldo actualizados: la fila eliminada ya no está y el saldo muestra el valor nuevo.
+    await pagina.waitForFunction(
+      ({ textoSaldo: saldoEsperado, idMovimiento: id, selectorFila }) => {
+        const saldo = document.querySelector('.saldo');
+        const sigueLaFila = [...document.querySelectorAll(selectorFila)].some(
+          (boton) => boton.dataset.idMovimiento === id,
+        );
+        return saldo?.textContent === saldoEsperado && !sigueLaFila;
+      },
+      { textoSaldo, idMovimiento, selectorFila: selectorFilaMovimiento },
+      { polling: 'raf', timeout: 30_000 },
+    );
+    duraciones.push(performance.now() - inicio);
+  }
+
+  await sesionCdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+
+  const p95 = InformarDuraciones(duraciones, 'AC-09, eliminaciones');
 
   expect(duraciones).toHaveLength(cantidadMediciones);
   expect(p95).toBeLessThan(limiteP95Ms);

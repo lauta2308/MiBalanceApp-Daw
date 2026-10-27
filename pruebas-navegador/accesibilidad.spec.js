@@ -1,6 +1,8 @@
 // Accesibilidad (NFR-07, NFR-08): uso solo con teclado y foco visible (AC-61), y contraste de
 // textos e íconos medido con axe-core (AC-62). Edición (FEAT-001b NFR-04, NFR-06): el menú de la
 // fila y el formulario de edición solo con el teclado (AC-27) y su contraste con axe-core (AC-29).
+// Eliminación (FEAT-001c NFR-04, NFR-06): el menú con "Eliminar" y la confirmación solo con el
+// teclado (AC-13), el clic afuera del menú sobre un control enfocable (D7) y su contraste (AC-15).
 
 import AxeBuilder from '@axe-core/playwright';
 import {
@@ -328,6 +330,146 @@ test('un clic afuera del menú, en una zona no enfocable, lo cierra y deja el fo
   await expect(fila, `foco tras el clic afuera: ${elementoConFoco}`).toBeFocused();
 });
 
+// --- Eliminación solo con el teclado (FEAT-001c AC-13) ---
+
+const rutaRpcEliminar = '**/rest/v1/rpc/basp_eliminar_movimiento';
+
+// Retiene las llamadas a la RPC de eliminación hasta que se llame a la función devuelta: así se ve
+// la confirmación en su estado "Eliminando…". Liberar deja pasar las llamadas retenidas y quita la
+// ruta; las pruebas lo llaman en un finally para que una aserción fallida no deje la ruta puesta.
+async function RetenerEliminacion(pagina) {
+  let Soltar;
+  const liberada = new Promise((resolver) => {
+    Soltar = resolver;
+  });
+  // Llamadas retenidas en curso: la ruta se quita recién cuando terminan, porque quitarla con una
+  // llamada pendiente la resuelve por otro lado y el continue() fallaría.
+  const enCurso = [];
+  function Retener(ruta) {
+    const continuacion = liberada.then(() => ruta.continue());
+    enCurso.push(continuacion);
+    return continuacion;
+  }
+  await pagina.route(rutaRpcEliminar, Retener);
+  return async function Liberar() {
+    Soltar();
+    await Promise.allSettled(enCurso);
+    await pagina.unroute(rutaRpcEliminar, Retener);
+  };
+}
+
+test('solo con el teclado se abre el menú de una fila, se elige "Eliminar", se recorren "Cancelar" y "Confirmar" y se confirma, con foco visible en cada paso (AC-13)', async ({
+  paginaConUsuario: pagina,
+  usuario,
+}) => {
+  test.setTimeout(120_000);
+  await CargarMovimientos(usuario.idCuenta, [
+    { tipo: 'INGRESO', monto: '10000.00', fecha: '2026-01-01' },
+    { tipo: 'GASTO', monto: '3000.00', fecha: ObtenerFechaLocal(-2) },
+  ]);
+
+  await pagina.goto('/');
+  await expect(pagina.getByText('USD 7.000,00', { exact: true })).toBeVisible();
+  const filaGasto = ObtenerFilas(pagina).first();
+  await expect(filaGasto).toHaveText('Pago Realizado-3.000,00');
+  const idMovimiento = await filaGasto.getAttribute('data-id-movimiento');
+
+  // Menú de la fila: Enter lo abre con el foco en "Editar"; las opciones quedan fuera del orden de
+  // Tab, así que la flecha hacia abajo lleva a "Eliminar".
+  await TabularHasta(pagina, filaGasto);
+  await Presionar(pagina, 'Enter', 'abrir el menú de la fila');
+  const menu = pagina.getByRole('menu');
+  await expect(menu).toBeVisible();
+  await EsperarFocoVisibleEn(pagina, menu.getByRole('menuitem', { name: 'Editar' }), 'Editar al abrir el menú');
+  await Presionar(pagina, 'ArrowDown', 'hacia Eliminar');
+  const opcionEliminar = menu.getByRole('menuitem', { name: 'Eliminar' });
+  await EsperarFocoVisibleEn(pagina, opcionEliminar, 'Eliminar');
+  await pagina.keyboard.press('Enter');
+
+  // Confirmación: el foco empieza en "Cancelar" y Tab / Mayús+Tab lo alternan con "Confirmar".
+  await expect(menu).toBeHidden();
+  const dialogo = pagina.getByRole('alertdialog');
+  await expect(dialogo).toBeVisible();
+  const botonCancelar = dialogo.getByRole('button', { name: 'Cancelar' });
+  const botonConfirmar = dialogo.getByRole('button', { name: 'Confirmar' });
+  await EsperarFocoVisibleEn(pagina, botonCancelar, 'Cancelar al abrir la confirmación');
+  await Presionar(pagina, 'Tab', 'hacia Confirmar');
+  await expect(botonConfirmar).toBeFocused();
+  await Presionar(pagina, 'Tab', 'Tab no sale de la confirmación');
+  await expect(botonCancelar).toBeFocused();
+  await Presionar(pagina, 'Shift+Tab', 'de vuelta a Confirmar');
+  await expect(botonConfirmar).toBeFocused();
+
+  // Con la RPC retenida, Enter deja "Eliminando…" con el foco; "Cancelar" queda deshabilitado, ni
+  // Escape, ni Tab, ni un clic en "Cancelar" le sacan el foco.
+  const LiberarEliminacion = await RetenerEliminacion(pagina);
+  try {
+    await pagina.keyboard.press('Enter');
+    const botonEliminando = dialogo.getByRole('button', { name: 'Eliminando…' });
+    await EsperarFocoVisibleEn(pagina, botonEliminando, 'Eliminando…');
+    await expect(botonEliminando).toHaveAttribute('aria-disabled', 'true');
+    await expect(botonCancelar).toBeDisabled();
+    await Presionar(pagina, 'Escape', 'Escape mientras elimina');
+    await expect(dialogo).toBeVisible();
+    await expect(botonEliminando).toBeFocused();
+    await Presionar(pagina, 'Tab', 'Tab mientras elimina');
+    await expect(botonEliminando).toBeFocused();
+    await botonCancelar.click({ force: true });
+    await expect(dialogo).toBeVisible();
+    const elementoConFoco = await pagina.evaluate(() => document.activeElement?.outerHTML.slice(0, 120));
+    await expect(botonEliminando, `foco tras el clic en "Cancelar" deshabilitado: ${elementoConFoco}`).toBeFocused();
+  } finally {
+    await LiberarEliminacion();
+  }
+
+  // Eliminado: la página 1 recargada sin la fila, el saldo nuevo y el foco en la primera fila.
+  await expect(pagina.getByText('Movimiento eliminado con éxito.')).toBeVisible();
+  await expect(pagina.getByRole('img', { name: 'Éxito' })).toBeVisible();
+  await expect(dialogo).toBeHidden();
+  await expect(pagina.getByText('USD 10.000,00', { exact: true })).toBeVisible();
+  await expect(ObtenerFilaPorId(pagina, idMovimiento)).toHaveCount(0);
+  await expect(ObtenerFilas(pagina)).toHaveText(['Pago Ingresado+10.000,00']);
+  await EsperarFocoVisibleEn(pagina, ObtenerFilas(pagina).first(), 'primera fila tras eliminar');
+
+  const { data, error } = await CrearClienteAdministrador()
+    .from('bat_movimientos')
+    .select('id')
+    .eq('id', idMovimiento);
+  expect(error).toBeNull();
+  expect(data).toEqual([]);
+});
+
+// D7 (W-1 de FEAT-001b): un clic afuera del menú sobre un control enfocable lo cierra sin
+// devolver el foco a la fila: el foco queda en ese control. Se verifica entre el mousedown y el
+// mouseup, antes de que el clic abra el formulario.
+test('con el menú de una fila abierto, un clic en "Añadir Ingreso" cierra el menú y deja el foco en "Añadir Ingreso" (D7)', async ({
+  paginaConUsuario: pagina,
+  usuario,
+}) => {
+  await CargarMovimientos(usuario.idCuenta, [
+    { tipo: 'INGRESO', monto: '10000.00', fecha: '2026-01-01' },
+    { tipo: 'GASTO', monto: '3000.00', fecha: ObtenerFechaLocal(-2) },
+  ]);
+  await pagina.goto('/');
+  await expect(pagina.getByText('USD 7.000,00', { exact: true })).toBeVisible();
+  const fila = ObtenerFilas(pagina).first();
+  await fila.click();
+  const menu = pagina.getByRole('menu');
+  await expect(menu.getByRole('menuitem', { name: 'Editar' })).toBeFocused();
+
+  const botonIngreso = pagina.getByRole('button', { name: 'Añadir Ingreso' });
+  await botonIngreso.hover();
+  await pagina.mouse.down();
+  await expect(menu).toBeHidden();
+  const elementoConFoco = await pagina.evaluate(() => document.activeElement?.outerHTML.slice(0, 120));
+  await expect(botonIngreso, `foco tras el clic en "Añadir Ingreso": ${elementoConFoco}`).toBeFocused();
+  await expect(fila).not.toBeFocused();
+
+  // El mouseup completa el clic: se abre el formulario de alta como siempre.
+  await pagina.mouse.up();
+  await expect(pagina.getByRole('heading', { level: 1, name: 'Añadir Ingreso' })).toBeVisible();
+});
+
 // --- Contraste (AC-62) ---
 
 function ObtenerLuminancia(colorCss) {
@@ -525,5 +667,58 @@ test.describe('contraste con axe-core (AC-62)', () => {
     await expect(pagina.getByText('Movimiento actualizado con éxito.')).toBeVisible();
     await expect(pagina.getByText('USD 11.500,00', { exact: true })).toBeVisible();
     await AnalizarContraste(pagina, 'Cuenta tras editar, mensaje de éxito');
+  });
+
+  test('el menú de la fila abierto con "Eliminar" y la confirmación de la eliminación, también mientras elimina, no tienen violaciones de color-contrast (AC-15)', async ({
+    paginaConUsuario: pagina,
+    usuario,
+  }) => {
+    const idMercado = await CargarCategoria(usuario.idCuenta, 'Mercado', 'GASTO');
+    await CargarMovimientos(usuario.idCuenta, [
+      { tipo: 'INGRESO', monto: '10000.00', fecha: '2026-01-01' },
+      { tipo: 'GASTO', monto: '1500.00', fecha: ObtenerFechaLocal(-1), idCategoria: idMercado },
+    ]);
+    await pagina.goto('/');
+    await expect(pagina.getByText('USD 8.500,00', { exact: true })).toBeVisible();
+
+    // Menú abierto con el foco en "Eliminar".
+    await ObtenerFilas(pagina).first().click();
+    const menu = pagina.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await pagina.keyboard.press('ArrowDown');
+    const opcionEliminar = menu.getByRole('menuitem', { name: 'Eliminar' });
+    await expect(opcionEliminar).toBeFocused();
+    await AnalizarContraste(pagina, 'Cuenta con el menú abierto en "Eliminar"');
+    await AnalizarContraste(pagina, 'menú de la fila con "Eliminar"', { incluir: '[role="menu"]' });
+
+    // Confirmación.
+    await opcionEliminar.click();
+    const dialogo = pagina.getByRole('alertdialog');
+    await expect(dialogo).toBeVisible();
+    await expect(dialogo.getByRole('button', { name: 'Cancelar' })).toBeFocused();
+    await AnalizarContraste(pagina, 'Cuenta con la confirmación abierta');
+    await AnalizarContraste(pagina, 'confirmación de la eliminación', {
+      incluir: '[role="alertdialog"]',
+    });
+    await dialogo.getByRole('button', { name: 'Confirmar' }).focus();
+    await AnalizarContraste(pagina, 'confirmación con el foco en "Confirmar"', {
+      incluir: '[role="alertdialog"]',
+    });
+
+    // Mientras elimina ("Eliminando…" y "Cancelar" deshabilitado).
+    const LiberarEliminacion = await RetenerEliminacion(pagina);
+    try {
+      await dialogo.getByRole('button', { name: 'Confirmar' }).click();
+      await expect(dialogo.getByRole('button', { name: 'Eliminando…' })).toBeFocused();
+      await AnalizarContraste(pagina, 'confirmación mientras elimina', {
+        incluir: '[role="alertdialog"]',
+      });
+    } finally {
+      await LiberarEliminacion();
+    }
+
+    await expect(pagina.getByText('Movimiento eliminado con éxito.')).toBeVisible();
+    await expect(pagina.getByText('USD 10.000,00', { exact: true })).toBeVisible();
+    await AnalizarContraste(pagina, 'Cuenta tras eliminar, mensaje de éxito');
   });
 });

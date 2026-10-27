@@ -1,11 +1,14 @@
 // Diseño responsive (NFR-05, AC-59): en 320, 768, 1280 y 1920 px se ve el saldo y la lista, se
 // pagina y se registra un gasto y un ingreso sin desplazamiento horizontal. Edición (FEAT-001b
 // NFR-05, AC-28): en esos anchos se abre el menú de una fila, se edita el movimiento y se guarda.
+// Eliminación (FEAT-001c NFR-05, AC-14): en esos anchos se abre el menú, se ve la confirmación
+// completa y se confirma.
 
 import {
   CargarMovimientos,
   CrearMovimientosAnteriores,
   ObtenerFechaLocal,
+  ObtenerFilaPorId,
   ObtenerFilas,
   expect,
   test,
@@ -116,6 +119,30 @@ async function VerificarMenuDentroDeVentana(pagina, menu, paso) {
   const detalle = `${paso}: menú ${caja.x.toFixed(0)}–${(caja.x + caja.width).toFixed(0)} px de ${anchoVentana} px`;
   expect(caja.x, detalle).toBeGreaterThanOrEqual(0);
   expect(caja.x + caja.width, detalle).toBeLessThanOrEqual(anchoVentana);
+  return detalle;
+}
+
+// La confirmación y sus dos botones quedan enteros dentro de la ventana y los botones, dentro del
+// diálogo.
+async function VerificarConfirmacionCompleta(pagina, dialogo, paso) {
+  const anchoVentana = await pagina.evaluate(() => window.innerWidth);
+  const altoVentanaActual = await pagina.evaluate(() => window.innerHeight);
+  const cajaDialogo = await dialogo.boundingBox();
+  const detalle = `${paso}: confirmación ${cajaDialogo.x.toFixed(0)}–${(cajaDialogo.x + cajaDialogo.width).toFixed(0)} px de ${anchoVentana} px`;
+  expect(cajaDialogo.x, detalle).toBeGreaterThanOrEqual(0);
+  expect(cajaDialogo.x + cajaDialogo.width, detalle).toBeLessThanOrEqual(anchoVentana);
+  expect(cajaDialogo.y, detalle).toBeGreaterThanOrEqual(0);
+  expect(cajaDialogo.y + cajaDialogo.height, detalle).toBeLessThanOrEqual(altoVentanaActual);
+  for (const nombre of ['Cancelar', 'Confirmar']) {
+    const boton = dialogo.getByRole('button', { name: nombre });
+    await expect(boton).toBeVisible();
+    const caja = await boton.boundingBox();
+    const detalleBoton = `${detalle}; "${nombre}" ${caja.x.toFixed(0)}–${(caja.x + caja.width).toFixed(0)} px`;
+    expect(caja.x, detalleBoton).toBeGreaterThanOrEqual(cajaDialogo.x);
+    expect(caja.x + caja.width, detalleBoton).toBeLessThanOrEqual(cajaDialogo.x + cajaDialogo.width);
+    expect(caja.y + caja.height, detalleBoton).toBeLessThanOrEqual(cajaDialogo.y + cajaDialogo.height);
+  }
+  await expect(dialogo).toHaveAccessibleName('¿Está seguro que desea eliminar este movimiento?');
   return detalle;
 }
 
@@ -251,6 +278,48 @@ for (const ancho of anchos) {
     await VerificarSinDesbordes(pagina, `${ancho} px, Cuenta tras editar`);
 
     const resumen = `AC-28 ${ancho} px: ${detalleMenu}; documento con el calendario de la edición ${medicion.anchoDocumento}/${medicion.anchoVentana} px`;
+    console.log(resumen);
+    test.info().annotations.push({ type: 'anchos', description: resumen });
+  });
+}
+
+for (const ancho of anchos) {
+  test(`en ${ancho} px se abre el menú de una fila, se ve la confirmación completa y se elimina el movimiento sin desplazamiento horizontal (AC-14)`, async ({
+    paginaConUsuario: pagina,
+    usuario,
+  }) => {
+    await CargarMovimientos(usuario.idCuenta, [
+      { tipo: 'INGRESO', monto: '1000.00', fecha: '2026-01-01' },
+      { tipo: 'GASTO', monto: '300.00', fecha: ObtenerFechaLocal(-1) },
+    ]);
+    await pagina.setViewportSize({ width: ancho, height: altoVentana });
+    await pagina.goto('/');
+    await expect(pagina.getByText('USD 700,00', { exact: true })).toBeVisible();
+
+    const fila = ObtenerFilas(pagina).first();
+    await expect(fila).toHaveText('Pago Realizado-300,00');
+    const idMovimiento = await fila.getAttribute('data-id-movimiento');
+    await fila.click();
+    const menu = pagina.getByRole('menu');
+    await expect(menu).toBeVisible();
+    const detalleMenu = await VerificarMenuDentroDeVentana(pagina, menu, `${ancho} px`);
+    await VerificarSinDesbordes(pagina, `${ancho} px, menú de la fila abierto`);
+
+    await menu.getByRole('menuitem', { name: 'Eliminar' }).click();
+    const dialogo = pagina.getByRole('alertdialog');
+    await expect(dialogo).toBeVisible();
+    const detalleConfirmacion = await VerificarConfirmacionCompleta(pagina, dialogo, `${ancho} px`);
+    const medicion = await VerificarSinDesbordes(pagina, `${ancho} px, confirmación abierta`);
+
+    await dialogo.getByRole('button', { name: 'Confirmar' }).click();
+    await expect(pagina.getByText('Movimiento eliminado con éxito.')).toBeVisible();
+    await expect(dialogo).toBeHidden();
+    await expect(pagina.getByText('USD 1.000,00', { exact: true })).toBeVisible();
+    await expect(ObtenerFilaPorId(pagina, idMovimiento)).toHaveCount(0);
+    await expect(ObtenerFilas(pagina)).toHaveText(['Pago Ingresado+1.000,00']);
+    await VerificarSinDesbordes(pagina, `${ancho} px, Cuenta tras eliminar`);
+
+    const resumen = `AC-14 ${ancho} px: ${detalleMenu}; ${detalleConfirmacion}; documento con la confirmación ${medicion.anchoDocumento}/${medicion.anchoVentana} px`;
     console.log(resumen);
     test.info().annotations.push({ type: 'anchos', description: resumen });
   });
