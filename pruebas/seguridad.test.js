@@ -1,6 +1,7 @@
 // RLS y permisos: un usuario (A) no puede leer ni escribir datos de otro (B) ni escribir
 // directamente los propios (spec FEAT-001a, Block 2; threat model R1, R2, R4, R10). Suma los
-// permisos de la edición (spec FEAT-001b, Block 2; threat model de FEAT-001b R2, R7).
+// permisos de la edición (spec FEAT-001b, Block 2; threat model de FEAT-001b R2, R7) y los de la
+// eliminación (spec FEAT-001c, Block 1; threat model de FEAT-001c R2).
 
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -347,6 +348,31 @@ describe('aislamiento entre usuarios', { timeout: 60000 }, () => {
       .eq('id', idMovimientoB);
     expect(ajeno.error).toBeNull();
     expect(ajeno.data).toEqual([]);
+  });
+
+  it('(E1-6 de FEAT-001c, R2) solo authenticated ejecuta basp_eliminar_movimiento; anon y service_role reciben 42501 por la API', async () => {
+    const { idCuentaA, idMovimientoA } = await ObtenerContexto();
+    const antes = await LeerDatosCuenta(idCuentaA);
+
+    const [privilegios] = await ConsultarBaseDatos(
+      `SELECT has_function_privilege('anon', 'public.basp_eliminar_movimiento(uuid)', 'EXECUTE') AS eliminacion_anon,
+              has_function_privilege('service_role', 'public.basp_eliminar_movimiento(uuid)', 'EXECUTE') AS eliminacion_service_role,
+              has_function_privilege('authenticated', 'public.basp_eliminar_movimiento(uuid)', 'EXECUTE') AS eliminacion_authenticated`,
+    );
+    expect(privilegios).toEqual({
+      eliminacion_anon: false,
+      eliminacion_service_role: false,
+      eliminacion_authenticated: true,
+    });
+
+    // Desde la API: anon y service_role no pueden llamarla, ni siquiera sobre un movimiento de A.
+    const parametros = { p_id_movimiento: idMovimientoA };
+    const comoAnon = await CrearClienteAnonimo().rpc('basp_eliminar_movimiento', parametros);
+    expect(comoAnon.error?.code).toBe('42501');
+    const comoServiceRole = await CrearClienteAdministrador().rpc('basp_eliminar_movimiento', parametros);
+    expect(comoServiceRole.error?.code).toBe('42501');
+
+    expect(await LeerDatosCuenta(idCuentaA)).toEqual(antes);
   });
 
   it('(R10) la service role solo tiene los privilegios que usan las pruebas y ninguno sobre el esquema pruebas', async () => {
