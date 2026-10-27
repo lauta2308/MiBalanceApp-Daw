@@ -202,12 +202,60 @@ body {
 }
 
 .fila-movimiento {
+  position: relative;
+  border-bottom: 1px solid currentColor;
+}
+
+/* Cada fila es un botón que abre su menú (FEAT-001b FR-01): ocupa todo el
+   ancho de la fila y conserva el aspecto de la lista. */
+.boton-fila-movimiento {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.25rem 1rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid currentColor;
+  width: 100%;
+  padding: 0.5rem 0.25rem;
+  font: inherit;
+  text-align: left;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+  border: none;
+  cursor: pointer;
+}
+
+/* Menú de la fila: se abre debajo, alineado a la derecha y sin superar el
+   ancho de la fila, para no desbordar en 320 px (NFR-05). */
+.menu-movimiento {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  min-width: 8rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background-color: var(--color-fondo);
+  border: 1px solid var(--color-texto);
+  border-radius: 0.25rem;
+  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 20%);
+}
+
+.opcion-menu {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  text-align: left;
+  color: var(--color-texto);
+  background-color: var(--color-fondo);
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.opcion-menu:hover {
+  text-decoration: underline;
 }
 
 .categoria-movimiento {
@@ -244,7 +292,7 @@ body {
   margin: 0;
 }
 
-/* Formulario de alta (FR-12 a FR-33, FR-48). Mismas reglas responsive que la
+/* Formulario de alta y de edición (FR-12 a FR-33, FR-48). Mismas reglas responsive que la
    sección Cuenta: unidades relativas y sin anchos fijos (NFR-05). */
 .encabezado-formulario {
   display: flex;
@@ -314,6 +362,40 @@ body {
   background-color: var(--color-fondo);
   border: 1px solid var(--color-texto);
   border-radius: 0.25rem;
+}
+
+/* Selector de tipo de la edición (FR-06): radios nativos en fila, que pasan
+   a la línea siguiente si no entran (NFR-05). */
+.selector-tipo {
+  min-width: 0;
+  padding: 0;
+  border: none;
+}
+
+.selector-tipo .etiqueta-campo {
+  padding: 0;
+}
+
+.opciones-tipo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.opcion-tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.opcion-tipo input {
+  margin: 0;
+  accent-color: var(--color-texto);
+}
+
+.selector-tipo:disabled .opcion-tipo {
+  cursor: not-allowed;
 }
 
 .campo-fecha {
