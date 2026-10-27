@@ -66,4 +66,24 @@ describe('ObtenerCliente', () => {
     await expect(ObtenerPaginaMovimientos(1)).resolves.toEqual({ ok: false });
     await expect(ObtenerCategorias('GASTO')).resolves.toEqual({ ok: false });
   });
+
+  it('(error E3-3, E3-4) si clienteSupabase.js lanza al cargarse, ObtenerMovimiento y EditarMovimiento devuelven { ok: false }', async () => {
+    vi.doMock('./clienteSupabase.js', () => {
+      throw new Error('Faltan las variables de entorno de Supabase.');
+    });
+    const { EditarMovimiento, ObtenerMovimiento } = await import('./movimientos.js');
+
+    await expect(ObtenerMovimiento('3f2b8c1e-5a4d-4e7f-9b6a-1c2d3e4f5a6b')).resolves.toEqual({
+      ok: false,
+    });
+    await expect(
+      EditarMovimiento({
+        idMovimiento: '3f2b8c1e-5a4d-4e7f-9b6a-1c2d3e4f5a6b',
+        tipo: 'GASTO',
+        monto: '2.000',
+        idCategoria: 'categoria-mercado',
+        fecha: '2026-09-18',
+      }),
+    ).resolves.toEqual({ ok: false });
+  });
 });

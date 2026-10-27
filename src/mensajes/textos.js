@@ -1,9 +1,10 @@
 // Todos los textos fijos que la interfaz muestra en mensajes (NFR-06, R11):
 // nunca se muestra el mensaje que devuelve Supabase.
 
-// Éxito (FR-43).
+// Éxito (FR-43; edición: FR-20 de FEAT-001b).
 export const mensajeGastoRegistrado = 'Gasto registrado con éxito.';
 export const mensajeIngresoRegistrado = 'Ingreso registrado con éxito.';
+export const mensajeMovimientoActualizado = 'Movimiento actualizado con éxito.';
 
 // Validación (FR-24, FR-25).
 export const mensajeMontoMayorACero = 'El monto debe ser mayor a 0.';
