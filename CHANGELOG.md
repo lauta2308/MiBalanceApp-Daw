@@ -1,0 +1,22 @@
+# Registro de Cambios
+
+Todos los cambios notables de este proyecto se registran en este archivo.
+El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
+
+## [Sin publicar]
+
+### Agregado
+- [FEAT-001a] Inicio de sesión anónimo (provisorio hasta Google OAuth) con
+  mensaje de error y botón "Aceptar" para reintentar.
+- [FEAT-001a] Cuenta única por usuario, creada automáticamente con las
+  categorías por defecto "Pago Realizado" y "Pago Ingresado".
+- [FEAT-001a] Sección Cuenta con el saldo en verde o rojo, lista de
+  movimientos agrupada por fecha y paginación de 50 en 50.
+- [FEAT-001a] Formularios "Añadir Gasto" y "Añadir Ingreso" con monto,
+  categoría y calendario en español; el alta y el saldo se actualizan en
+  una sola operación atómica.
+- [FEAT-001a] Seguridad en la base: cada usuario solo ve sus datos (RLS) y
+  ninguna escritura directa desde la API.
+- [FEAT-001a] Accesibilidad y rendimiento: uso completo con teclado, foco
+  visible, contraste verificado con axe-core, sin desplazamiento horizontal
+  de 320 a 1920 px y altas en menos de 2 s (p95).
