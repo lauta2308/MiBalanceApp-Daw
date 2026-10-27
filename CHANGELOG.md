@@ -20,3 +20,15 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - [FEAT-001a] Accesibilidad y rendimiento: uso completo con teclado, foco
   visible, contraste verificado con axe-core, sin desplazamiento horizontal
   de 320 a 1920 px y altas en menos de 2 s (p95).
+- [FEAT-001b] Menú en cada fila de la lista con la opción "Editar", que se
+  abre con clic, toque o teclado.
+- [FEAT-001b] Formulario "Editar Movimiento" precargado: permite cambiar el
+  tipo, el monto, la categoría y la fecha; al cambiar el tipo sin elegir
+  categoría usa la categoría por defecto del tipo nuevo.
+- [FEAT-001b] Edición y ajuste del saldo en una sola operación atómica,
+  sin cambiar la fecha de registro ni permitir editar movimientos de otro
+  usuario; ediciones en menos de 2 s (p95).
+
+### Cambiado
+- [FEAT-001b] Los servicios comparten un único acceso al cliente de
+  Supabase, y las pruebas, sus ayudantes comunes.
