@@ -86,4 +86,15 @@ describe('ObtenerCliente', () => {
       }),
     ).resolves.toEqual({ ok: false });
   });
+
+  it('(error E2-3) si clienteSupabase.js lanza al cargarse, EliminarMovimiento devuelve { ok: false }', async () => {
+    vi.doMock('./clienteSupabase.js', () => {
+      throw new Error('Faltan las variables de entorno de Supabase.');
+    });
+    const { EliminarMovimiento } = await import('./movimientos.js');
+
+    await expect(EliminarMovimiento('3f2b8c1e-5a4d-4e7f-9b6a-1c2d3e4f5a6b')).resolves.toEqual({
+      ok: false,
+    });
+  });
 });

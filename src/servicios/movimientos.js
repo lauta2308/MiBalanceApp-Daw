@@ -1,11 +1,12 @@
 // Lectura paginada de los movimientos (FR-34, FR-39), alta (FR-12, FR-13),
-// lectura de un movimiento y edición (FEAT-001b). Nunca expone el error de
-// Supabase (NFR-06): devuelve { ok: true, ... } o { ok: false }.
+// lectura de un movimiento, edición (FEAT-001b) y eliminación (FEAT-001c).
+// Nunca expone el error de Supabase (NFR-06): devuelve { ok: true, ... } o
+// { ok: false }.
 import { ConvertirMontoParaApi } from '../utilidades/montos.js';
 import { ObtenerCliente } from './obtenerCliente.js';
 
-// El id del movimiento llega de la URL y no es confiable: se valida su forma
-// antes de consultar.
+// El id del movimiento llega de afuera del servicio (la URL de la edición o la
+// fila de la lista) y no es confiable: se valida su forma antes de consultar.
 const expresionUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // La lista siempre se pide de a 50 filas: nunca se cargan todos los movimientos.
@@ -89,6 +90,27 @@ export async function EditarMovimiento({ idMovimiento, tipo, monto, idCategoria,
       p_monto: ConvertirMontoParaApi(monto),
       p_id_categoria: idCategoria,
       p_fecha: fecha,
+    });
+    if (error || !data) {
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+// Eliminación atómica de un movimiento (FR-03, FR-05): una sola llamada RPC que
+// borra el movimiento y ajusta el saldo en la misma transacción. Un id mal
+// formado da { ok: false } sin consultar; cualquier rechazo, también (FR-10).
+export async function EliminarMovimiento(idMovimiento) {
+  if (typeof idMovimiento !== 'string' || !expresionUuid.test(idMovimiento)) {
+    return { ok: false };
+  }
+  try {
+    const cliente = await ObtenerCliente();
+    const { data, error } = await cliente.rpc('basp_eliminar_movimiento', {
+      p_id_movimiento: idMovimiento,
     });
     if (error || !data) {
       return { ok: false };
