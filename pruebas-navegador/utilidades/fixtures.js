@@ -146,6 +146,22 @@ export function ObtenerFechaLocal(dias = 0, desde = new Date()) {
   return `${anio}-${mes}-${dia}`;
 }
 
+// --- Filas de la lista ---
+
+// Cada fila de la lista es un botón que abre su menú (FEAT-001b FR-01). Si la fila cambia, se
+// cambia solo aquí.
+export const selectorFilaMovimiento = '.boton-fila-movimiento';
+
+// Filas dentro de la página o de un contenedor (por ejemplo, el grupo de una fecha).
+export function ObtenerFilas(contenedor) {
+  return contenedor.locator(selectorFilaMovimiento);
+}
+
+// Fila de un movimiento por su id (atributo data-id-movimiento).
+export function ObtenerFilaPorId(pagina, idMovimiento) {
+  return pagina.locator(`${selectorFilaMovimiento}[data-id-movimiento="${idMovimiento}"]`);
+}
+
 // --- Datos con service role ---
 
 export async function ObtenerCuentaUsuario(idUsuario) {

@@ -1,9 +1,12 @@
 // Diseño responsive (NFR-05, AC-59): en 320, 768, 1280 y 1920 px se ve el saldo y la lista, se
-// pagina y se registra un gasto y un ingreso sin desplazamiento horizontal.
+// pagina y se registra un gasto y un ingreso sin desplazamiento horizontal. Edición (FEAT-001b
+// NFR-05, AC-28): en esos anchos se abre el menú de una fila, se edita el movimiento y se guarda.
 
 import {
   CargarMovimientos,
   CrearMovimientosAnteriores,
+  ObtenerFechaLocal,
+  ObtenerFilas,
   expect,
   test,
 } from './utilidades/fixtures.js';
@@ -106,6 +109,16 @@ async function VerificarSinDesbordes(pagina, paso) {
   return medicion;
 }
 
+// El menú de la fila queda entero dentro de la ventana (se abre debajo y alineado a la derecha).
+async function VerificarMenuDentroDeVentana(pagina, menu, paso) {
+  const caja = await menu.boundingBox();
+  const anchoVentana = await pagina.evaluate(() => window.innerWidth);
+  const detalle = `${paso}: menú ${caja.x.toFixed(0)}–${(caja.x + caja.width).toFixed(0)} px de ${anchoVentana} px`;
+  expect(caja.x, detalle).toBeGreaterThanOrEqual(0);
+  expect(caja.x + caja.width, detalle).toBeLessThanOrEqual(anchoVentana);
+  return detalle;
+}
+
 async function RegistrarMovimiento(pagina, { nombreBoton, monto, mensaje, ancho }) {
   await pagina.getByRole('button', { name: nombreBoton }).click();
   await expect(pagina.getByRole('heading', { level: 1, name: nombreBoton })).toBeVisible();
@@ -152,13 +165,13 @@ for (const ancho of anchos) {
     await pagina.goto('/');
 
     await expect(pagina.getByText('USD 1.000,00', { exact: true })).toBeVisible();
-    await expect(pagina.getByRole('listitem')).toHaveCount(50);
+    await expect(ObtenerFilas(pagina)).toHaveCount(50);
     await expect(pagina.getByText('Página 1 de 2')).toBeVisible();
     await VerificarSinDesbordes(pagina, `${ancho} px, Cuenta página 1`);
 
     await pagina.getByRole('button', { name: 'Siguiente' }).click();
     await expect(pagina.getByText('Página 2 de 2')).toBeVisible();
-    await expect(pagina.getByRole('listitem')).toHaveCount(11);
+    await expect(ObtenerFilas(pagina)).toHaveCount(11);
     await VerificarSinDesbordes(pagina, `${ancho} px, Cuenta página 2`);
 
     const medicionGasto = await RegistrarMovimiento(pagina, {
@@ -177,10 +190,67 @@ for (const ancho of anchos) {
       ancho,
     });
     await expect(pagina.getByText('USD 999.999.498,50', { exact: true })).toBeVisible();
-    await expect(pagina.getByRole('listitem').first()).toHaveText('Pago Ingresado+999.999.999,00');
+    await expect(ObtenerFilas(pagina).first()).toHaveText('Pago Ingresado+999.999.999,00');
     await VerificarSinDesbordes(pagina, `${ancho} px, Cuenta tras el ingreso`);
 
     const resumen = `AC-59 ${ancho} px con septiembre abierto: documento ${medicionGasto.anchoDocumento}/${medicionGasto.anchoVentana} px, calendario ${medicionGasto.calendario.anchoContenido}/${medicionGasto.calendario.anchoVisible} px, margen de la grilla ${medicionGasto.calendario.margenGrilla.toFixed(1)} px, espacio entre mes/año y flechas ${medicionGasto.calendario.espacioEncabezado.toFixed(1)} px; cabecera: ${medicionGasto.cabecera}`;
+    console.log(resumen);
+    test.info().annotations.push({ type: 'anchos', description: resumen });
+  });
+}
+
+for (const ancho of anchos) {
+  test(`en ${ancho} px se abre el menú de una fila, se edita el movimiento y se guarda sin desplazamiento horizontal (AC-28)`, async ({
+    paginaConUsuario: pagina,
+    usuario,
+  }) => {
+    await CargarMovimientos(usuario.idCuenta, [
+      { tipo: 'INGRESO', monto: '1000.00', fecha: '2026-01-01' },
+      { tipo: 'GASTO', monto: '300.00', fecha: ObtenerFechaLocal(-1) },
+    ]);
+    await pagina.setViewportSize({ width: ancho, height: altoVentana });
+    await pagina.goto('/');
+    await expect(pagina.getByText('USD 700,00', { exact: true })).toBeVisible();
+
+    const fila = ObtenerFilas(pagina).first();
+    await expect(fila).toHaveText('Pago Realizado-300,00');
+    await fila.click();
+    const menu = pagina.getByRole('menu');
+    await expect(menu).toBeVisible();
+    const detalleMenu = await VerificarMenuDentroDeVentana(pagina, menu, `${ancho} px`);
+    await VerificarSinDesbordes(pagina, `${ancho} px, menú de la fila abierto`);
+
+    await menu.getByRole('menuitem', { name: 'Editar' }).click();
+    await expect(pagina.getByRole('heading', { level: 1, name: 'Editar Movimiento' })).toBeVisible();
+    const selectorCategoria = pagina.getByLabel('Categoría');
+    await expect(selectorCategoria).toBeEnabled();
+    await VerificarSinDesbordes(pagina, `${ancho} px, Editar Movimiento`);
+
+    // Tipo "Ingreso": la categoría pasa a "Pago Ingresado".
+    await pagina.getByRole('radio', { name: 'Ingreso', exact: true }).check();
+    await expect(selectorCategoria).toBeEnabled();
+    await expect(selectorCategoria.locator('option:checked')).toHaveText('Pago Ingresado');
+
+    await pagina.getByLabel('Fecha').click();
+    const calendario = pagina.getByRole('dialog', { name: 'Calendario' });
+    await expect(calendario).toBeVisible();
+    const medicion = await VerificarSinDesbordes(pagina, `${ancho} px, Editar Movimiento, calendario`);
+    await pagina.keyboard.press('Escape');
+    await expect(calendario).toBeHidden();
+
+    // El monto más largo que se muestra en la fila.
+    await pagina.getByLabel('Monto').fill('999999999');
+    await expect(pagina.getByLabel('Monto')).toHaveValue('999.999.999');
+    await VerificarSinDesbordes(pagina, `${ancho} px, Editar Movimiento con el monto`);
+    await pagina.getByRole('button', { name: 'Guardar' }).click();
+
+    await expect(pagina.getByText('Movimiento actualizado con éxito.')).toBeVisible();
+    await expect(pagina.getByRole('heading', { name: 'Mi Cuenta (USD)' })).toBeVisible();
+    await expect(pagina.getByText('USD 1.000.000.999,00', { exact: true })).toBeVisible();
+    await expect(ObtenerFilas(pagina).first()).toHaveText('Pago Ingresado+999.999.999,00');
+    await VerificarSinDesbordes(pagina, `${ancho} px, Cuenta tras editar`);
+
+    const resumen = `AC-28 ${ancho} px: ${detalleMenu}; documento con el calendario de la edición ${medicion.anchoDocumento}/${medicion.anchoVentana} px`;
     console.log(resumen);
     test.info().annotations.push({ type: 'anchos', description: resumen });
   });

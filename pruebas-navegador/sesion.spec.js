@@ -7,6 +7,7 @@ import {
   CargarMovimientos,
   MarcarUsuariosCreadosPorLaApp,
   ObtenerFechaLocal,
+  ObtenerFilas,
   expect,
   test,
 } from './utilidades/fixtures.js';
@@ -23,7 +24,7 @@ async function LeerIdUsuarioSesion(pagina) {
 async function VerificarCuenta(pagina) {
   await expect(pagina.getByRole('heading', { name: 'Mi Cuenta (USD)' })).toBeVisible();
   await expect(pagina.getByText('USD 1.500,00', { exact: true })).toBeVisible();
-  await expect(pagina.getByRole('listitem')).toHaveCount(3);
+  await expect(ObtenerFilas(pagina)).toHaveCount(3);
 }
 
 test('con saldo USD 1.500,00 y 3 movimientos, cerrar el navegador y volver a abrirlo muestra la misma cuenta, sin crear otro usuario (AC-04)', async ({

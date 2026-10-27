@@ -5,12 +5,20 @@ import { useRef } from 'react';
 import { MenuMovimiento } from './MenuMovimiento.jsx';
 
 // El menú se monta abierto, debajo del botón de la fila que lo abrió, como lo
-// usa ListaMovimientos. "Otro Botón" representa cualquier control de afuera.
+// usa ListaMovimientos. "Otro Botón" representa cualquier control de afuera;
+// el título, el botón deshabilitado, la etiqueta sin control y el enlace sin
+// destino son zonas de afuera que no pueden recibir el foco.
 function RenderizarMenu({ alEditar = vi.fn(), alCerrar = vi.fn() } = {}) {
   function Prueba() {
     const botonFila = useRef(null);
     return (
       <>
+        <h1>Mi Cuenta (USD)</h1>
+        <button type="button" disabled>
+          Anterior
+        </button>
+        <label>Sin Control</label>
+        <a>Enlace sin Destino</a>
         <button type="button" ref={botonFila}>
           Fila Mercado
         </button>
@@ -64,16 +72,42 @@ describe('MenuMovimiento', () => {
   it('un clic afuera lo cierra y devuelve el foco al botón de la fila', () => {
     const { alCerrar, botonFila } = RenderizarMenu();
 
-    fireEvent.pointerDown(document.body);
+    fireEvent.mouseDown(document.body);
 
     expect(alCerrar).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(botonFila);
   });
 
+  // El mousedown cancelado es lo que, en todos los navegadores, impide que el
+  // clic le quite el foco a la fila y lo deje en <body>.
+  it.each([
+    ['el título', () => screen.getByRole('heading', { name: 'Mi Cuenta (USD)' })],
+    ['un botón deshabilitado', () => screen.getByRole('button', { name: 'Anterior' })],
+    ['una etiqueta sin control', () => screen.getByText('Sin Control')],
+    ['un enlace sin destino', () => screen.getByText('Enlace sin Destino')],
+  ])('un clic afuera en %s (no enfocable) lo cierra, cancela el mousedown y devuelve el foco a la fila', (_, ObtenerZona) => {
+    const { alCerrar, botonFila } = RenderizarMenu();
+
+    const evento = fireEvent.mouseDown(ObtenerZona());
+
+    expect(evento).toBe(false);
+    expect(alCerrar).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(botonFila);
+  });
+
+  it('un clic afuera sobre un control enfocable lo cierra sin cancelar el mousedown, para que el foco quede en ese control', () => {
+    const { alCerrar } = RenderizarMenu();
+
+    const evento = fireEvent.mouseDown(screen.getByRole('button', { name: 'Otro Botón' }));
+
+    expect(evento).toBe(true);
+    expect(alCerrar).toHaveBeenCalledTimes(1);
+  });
+
   it('un clic en el botón de la fila no lo cierra desde el menú (lo cierra el botón)', () => {
     const { alCerrar, botonFila } = RenderizarMenu();
 
-    fireEvent.pointerDown(botonFila);
+    fireEvent.mouseDown(botonFila);
 
     expect(alCerrar).not.toHaveBeenCalled();
   });
