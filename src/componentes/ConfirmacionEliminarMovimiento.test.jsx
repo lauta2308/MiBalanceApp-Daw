@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ConfirmacionEliminarMovimiento } from './ConfirmacionEliminarMovimiento.jsx';
 
 const textoPregunta = '¿Está seguro que desea eliminar este movimiento?';
+// Vitest no procesa el CSS importado (llega vacío): la hoja se lee del disco.
+const estilos = readFileSync(join(process.cwd(), 'src', 'estilos.css'), 'utf8');
 
 // La confirmación se monta entre otros controles de la página ("Antes" y
 // "Después"), para comprobar que Tab y Mayús+Tab no salen del diálogo.
@@ -142,6 +146,29 @@ describe('ConfirmacionEliminarMovimiento', () => {
 
     expect(evento).toBe(false);
     expect(document.activeElement).toBe(ObtenerConfirmar());
+  });
+
+  // Chrome no entrega mousedown a un <button disabled> (sí pointerdown), así
+  // que el mousedown de arriba no corre y el foco cae en <body>. Con
+  // pointer-events: none el clic atraviesa "Cancelar" deshabilitado y cae en
+  // la caja: la caja anula el mousedown y el foco queda en "Eliminando…" (lo
+  // prueba en Chrome accesibilidad.spec.js).
+  it('mientras elimina, "Cancelar" deshabilitado no recibe el puntero (pointer-events: none) y "Eliminando…" sí', () => {
+    const hojaEstilos = document.createElement('style');
+    hojaEstilos.textContent = estilos;
+    document.head.append(hojaEstilos);
+    try {
+      expect(hojaEstilos.sheet.cssRules.length).toBeGreaterThan(0);
+      const { EstablecerEliminando } = RenderizarConfirmacion();
+      expect(getComputedStyle(ObtenerCancelar()).pointerEvents).not.toBe('none');
+
+      EstablecerEliminando(true);
+
+      expect(getComputedStyle(ObtenerCancelar()).pointerEvents).toBe('none');
+      expect(getComputedStyle(ObtenerConfirmar()).pointerEvents).not.toBe('none');
+    } finally {
+      hojaEstilos.remove();
+    }
   });
 
   it('un mousedown sobre un botón habilitado no se cancela', () => {

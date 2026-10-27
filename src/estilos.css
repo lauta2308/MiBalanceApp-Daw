@@ -107,6 +107,14 @@ body {
   width: 100%;
 }
 
+/* Mientras se elimina, Chrome no entrega mousedown a "Cancelar" deshabilitado
+   y el clic dejaría el foco en <body>: sin puntero, el clic cae en la caja, la
+   caja anula el mousedown y el foco queda en "Eliminando…" (NFR-04). Se pierde
+   el cursor not-allowed de "Cancelar" mientras se elimina (decisión aceptada). */
+.botones-confirmacion button:disabled {
+  pointer-events: none;
+}
+
 @media (width < 360px) {
   .botones-confirmacion {
     flex-direction: column;
