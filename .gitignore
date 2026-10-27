@@ -8,3 +8,19 @@
 .daw-sessions/
 .daw-journal.jsonl
 # END DAW
+
+# Dependencias, compilación y resultados de pruebas
+node_modules/
+dist/
+test-results/
+playwright-report/
+# Sesiones guardadas de las pruebas en navegador (tienen tokens)
+pruebas-navegador/.sesiones/
+__pycache__/
+
+# Variables de entorno locales (nunca se commitean)
+.env
+.env*.local
+
+# Archivos temporales de la CLI de Supabase (supabase link)
+supabase/.temp/
