@@ -6,7 +6,7 @@
 | Ticket padre | FEAT-001 (Cuenta y Movimientos) |
 | Tracker | none |
 | Date | 2026-10-25 |
-| PRD loops | 2 |
+| PRD loops | 3 |
 
 > Sub-ticket de FEAT-001. Deriva de `docs/daw/prd/PRD.md` (PRD-001) y `docs/daw/prd/INTERFAZ.md`.
 > Cada requerimiento indica entre paréntesis su origen: `RF-xx` y `RNF-xx` de `PRD.md`, `UI-xx` de
@@ -44,6 +44,7 @@ confirmación, recalculando el saldo de forma atómica.
 - FR-08 (RF-55): El sistema debe mostrar la página 1 de la lista luego de eliminar un movimiento.
 - FR-09 (RF-49): El sistema debe mostrar el mensaje "Aquí verá sus movimientos." cuando se elimine el último movimiento de la cuenta.
 - FR-10 (RNF-07, RNF-05): El sistema debe mostrar "No se pudo eliminar el movimiento. Vuelva a intentarlo." con el botón "Aceptar" cuando el servidor falle o rechace la eliminación, cerrando la confirmación y dejando el movimiento en la lista y el saldo sin cambios.
+- FR-11 (RF-06 a RF-14): El sistema debe mantener el rechazo de FEAT-001a FR-50 a la modificación directa del saldo de la cuenta desde la API, ampliando su excepción a los cambios del saldo que produce la eliminación de movimientos (FR-05).
 
 ## Non-Functional Requirements
 
@@ -70,6 +71,7 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - AC-06 (FR-08; origen: PRD AC-40): WHEN el usuario A con 120 movimientos que está en la página 2 elimina un movimiento de esa página, THE sistema SHALL mostrar la página 1 con el indicador "Página 1 de 3".
 - AC-07 (FR-09): WHEN el usuario A con un único movimiento, un gasto de 500, lo elimina y confirma, THE sistema SHALL mostrar el mensaje "Aquí verá sus movimientos." y el saldo "USD 0,00".
 - AC-08 (FR-10): IF el servidor falla al eliminar un ingreso de 1.000 del usuario A con saldo USD 5.000,00 (simulado en la prueba), THEN THE sistema SHALL cerrar la confirmación, mostrar "No se pudo eliminar el movimiento. Vuelva a intentarlo." con el botón "Aceptar", seguir mostrando el movimiento en la lista y mantener el saldo en "USD 5.000,00".
+- AC-16 (FR-11): IF el usuario A con saldo USD 10.000,00, que ya incluye un gasto de 3.000, elimina ese gasto y confirma, y después intenta desde la API cambiar el saldo de su cuenta a 1000000, THEN THE sistema SHALL aceptar la eliminación con el saldo "USD 13.000,00", rechazar el cambio directo del saldo y seguir mostrando el saldo "USD 13.000,00".
 
 **No funcionales**
 
@@ -96,6 +98,6 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 
 ## Dependencies
 
-- FEAT-001a: cuenta, saldo, lista, paginación y mensajes.
+- FEAT-001a: cuenta, saldo, lista, paginación y mensajes; el rechazo a la modificación directa del saldo (FR-50), cuya excepción amplía FR-11.
 - FEAT-001b: el menú de la fila (S-1) y la operación de edición, que usa la secuencia de AC-12.
 - Documentos de producto: `docs/daw/prd/PRD.md` (RF-xx, RNF-xx, AC-xx de origen) y `docs/daw/prd/INTERFAZ.md` (UI-xx).
