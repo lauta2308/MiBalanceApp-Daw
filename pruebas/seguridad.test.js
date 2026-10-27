@@ -1,11 +1,14 @@
 // RLS y permisos: un usuario (A) no puede leer ni escribir datos de otro (B) ni escribir
-// directamente los propios (spec FEAT-001a, Block 2; threat model R1, R2, R4, R10).
+// directamente los propios (spec FEAT-001a, Block 2; threat model R1, R2, R4, R10). Suma los
+// permisos de la edición (spec FEAT-001b, Block 2; threat model de FEAT-001b R2, R7).
 
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CargarCategoria,
   ConsultarBaseDatos,
   CrearClienteAdministrador,
+  CrearClienteAnonimo,
   CrearUsuarioPrueba,
   EliminarUsuariosPrueba,
   ObtenerCuentaUsuario,
@@ -301,6 +304,49 @@ describe('aislamiento entre usuarios', { timeout: 60000 }, () => {
       { tabla: 'public.bat_cuentas', rls: true },
       { tabla: 'public.bat_movimientos', rls: true },
     ]);
+  });
+
+  it('(E2-8 de FEAT-001b, R2, R7) solo authenticated ejecuta basp_editar_movimiento y la vista sigue sin devolver movimientos ajenos', async () => {
+    const { idMovimientoB, idMovimientoA } = await ObtenerContexto();
+
+    const [privilegios] = await ConsultarBaseDatos(
+      `SELECT has_function_privilege('anon', 'public.basp_editar_movimiento(uuid, text, numeric, uuid, date)', 'EXECUTE') AS edicion_anon,
+              has_function_privilege('service_role', 'public.basp_editar_movimiento(uuid, text, numeric, uuid, date)', 'EXECUTE') AS edicion_service_role,
+              has_function_privilege('authenticated', 'public.basp_editar_movimiento(uuid, text, numeric, uuid, date)', 'EXECUTE') AS edicion_authenticated`,
+    );
+    expect(privilegios).toEqual({
+      edicion_anon: false,
+      edicion_service_role: false,
+      edicion_authenticated: true,
+    });
+
+    // Desde la API: anon y service_role no pueden llamarla.
+    const parametros = {
+      p_id_movimiento: idMovimientoA,
+      p_tipo: 'INGRESO',
+      p_monto: '1.00',
+      p_id_categoria: randomUUID(),
+      p_fecha: '2026-10-01',
+    };
+    const comoAnon = await CrearClienteAnonimo().rpc('basp_editar_movimiento', parametros);
+    expect(comoAnon.error?.code).toBe('42501');
+    const comoServiceRole = await CrearClienteAdministrador().rpc('basp_editar_movimiento', parametros);
+    expect(comoServiceRole.error?.code).toBe('42501');
+
+    // La vista, ya con id_categoria, conserva security_invoker y no devuelve el movimiento de B.
+    const [vista] = await ConsultarBaseDatos(
+      `SELECT c.reloptions
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relname = 'bav_movimientos'`,
+    );
+    expect(vista.reloptions).toEqual(['security_invoker=true']);
+    const ajeno = await usuarioA.cliente
+      .from('bav_movimientos')
+      .select('id, id_categoria')
+      .eq('id', idMovimientoB);
+    expect(ajeno.error).toBeNull();
+    expect(ajeno.data).toEqual([]);
   });
 
   it('(R10) la service role solo tiene los privilegios que usan las pruebas y ninguno sobre el esquema pruebas', async () => {

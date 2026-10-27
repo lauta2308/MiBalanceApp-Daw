@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Cliente de Supabase simulado: las consultas registran tabla, select, order y
-// range; las llamadas RPC registran nombre y parámetros. Cada prueba indica la
-// respuesta.
+// Cliente de Supabase simulado: las consultas registran tabla, select, order,
+// range, eq y maybeSingle; las llamadas RPC registran nombre y parámetros y
+// responden según el nombre de la función. Cada prueba indica la respuesta.
 const simulacion = vi.hoisted(() => ({
   consultas: [],
   llamadasRpc: [],
   responderMovimientos: null,
-  responderRpc: null,
+  respuestasRpc: {},
 }));
 
 vi.mock('./clienteSupabase.js', () => {
   function CrearConsulta(tabla) {
-    const registro = { tabla, select: null, order: [], range: null };
+    const registro = { tabla, select: null, order: [], range: null, eq: [], maybeSingle: false };
     simulacion.consultas.push(registro);
     const consulta = {
       select(...argumentos) {
@@ -25,6 +25,14 @@ vi.mock('./clienteSupabase.js', () => {
       },
       range(desde, hasta) {
         registro.range = [desde, hasta];
+        return consulta;
+      },
+      eq(...argumentos) {
+        registro.eq.push(argumentos);
+        return consulta;
+      },
+      maybeSingle() {
+        registro.maybeSingle = true;
         return consulta;
       },
       then(alResolver, alRechazar) {
@@ -40,13 +48,24 @@ vi.mock('./clienteSupabase.js', () => {
       from: (tabla) => CrearConsulta(tabla),
       rpc: (nombre, parametros) => {
         simulacion.llamadasRpc.push({ nombre, parametros });
-        return Promise.resolve().then(() => simulacion.responderRpc(parametros));
+        return Promise.resolve().then(() => {
+          const responder = simulacion.respuestasRpc[nombre];
+          if (!responder) {
+            throw new Error(`RPC sin respuesta simulada: ${nombre}`);
+          }
+          return responder(parametros);
+        });
       },
     },
   };
 });
 
-import { AgregarMovimiento, ObtenerPaginaMovimientos } from './movimientos.js';
+import {
+  AgregarMovimiento,
+  EditarMovimiento,
+  ObtenerMovimiento,
+  ObtenerPaginaMovimientos,
+} from './movimientos.js';
 
 const errorSupabase = { message: 'relation "bav_movimientos" does not exist', code: '42P01' };
 
@@ -76,7 +95,10 @@ describe('servicio de movimientos', () => {
     simulacion.consultas.length = 0;
     simulacion.llamadasRpc.length = 0;
     ConfigurarMovimientos([]);
-    simulacion.responderRpc = () => ({ data: 'id-movimiento-nuevo', error: null });
+    simulacion.respuestasRpc = {
+      basp_agregar_movimiento: () => ({ data: 'id-movimiento-nuevo', error: null }),
+      basp_editar_movimiento: (parametros) => ({ data: parametros.p_id_movimiento, error: null }),
+    };
   });
 
   describe('ObtenerPaginaMovimientos', () => {
@@ -161,7 +183,7 @@ describe('servicio de movimientos', () => {
         },
       ],
     ])('(error E6-3) ante %s devuelve exactamente { ok: false }, sin el error de Supabase (NFR-06, AC-60)', async (_, responder) => {
-      simulacion.responderRpc = responder;
+      simulacion.respuestasRpc.basp_agregar_movimiento = responder;
 
       const resultado = await AgregarMovimiento({
         tipo: 'GASTO',
@@ -171,6 +193,123 @@ describe('servicio de movimientos', () => {
       });
 
       expect(simulacion.llamadasRpc).toHaveLength(1);
+      expect(simulacion.llamadasRpc[0].nombre).toBe('basp_agregar_movimiento');
+      expect(resultado).toEqual({ ok: false });
+    });
+  });
+
+  describe('ObtenerMovimiento', () => {
+    const idMovimiento = '3f2b8c1e-5a4d-4e7f-9b6a-1c2d3e4f5a6b';
+    const movimiento = {
+      id: idMovimiento,
+      fecha: '2026-09-17',
+      tipo: 'GASTO',
+      monto: '1500.00',
+      id_categoria: '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+    };
+
+    it('con un id válido consulta bav_movimientos con eq("id", …) y devuelve el movimiento con monto y fecha como texto (FR-02)', async () => {
+      simulacion.responderMovimientos = () => ({ data: { ...movimiento }, error: null });
+
+      const resultado = await ObtenerMovimiento(idMovimiento);
+
+      expect(resultado).toEqual({ ok: true, movimiento });
+      expect(resultado.movimiento.monto).toBe('1500.00');
+      expect(resultado.movimiento.fecha).toBe('2026-09-17');
+      expect(simulacion.consultas).toHaveLength(1);
+      const [consulta] = simulacion.consultas;
+      expect(consulta.tabla).toBe('bav_movimientos');
+      expect(consulta.select[0].split(',').map((columna) => columna.trim())).toEqual([
+        'id',
+        'fecha',
+        'tipo',
+        'monto',
+        'id_categoria',
+      ]);
+      expect(consulta.eq).toEqual([['id', idMovimiento]]);
+      expect(consulta.maybeSingle).toBe(true);
+    });
+
+    it.each([['abc'], [''], [undefined], [`${idMovimiento}x`], ['3f2b8c1e5a4d4e7f9b6a1c2d3e4f5a6b']])(
+      '(error E3-1) con el id mal formado %j devuelve { ok: false } sin llamar a Supabase',
+      async (idMalFormado) => {
+        await expect(ObtenerMovimiento(idMalFormado)).resolves.toEqual({ ok: false });
+        expect(simulacion.consultas).toHaveLength(0);
+      },
+    );
+
+    it('(error E3-2) con data: null (inexistente o ajeno) devuelve { ok: false }', async () => {
+      simulacion.responderMovimientos = () => ({ data: null, error: null });
+
+      await expect(ObtenerMovimiento(idMovimiento)).resolves.toEqual({ ok: false });
+      expect(simulacion.consultas).toHaveLength(1);
+    });
+
+    it.each([
+      [
+        'un error de Supabase (22P02)',
+        () => ({ data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid' } }),
+      ],
+      [
+        'una excepción',
+        () => {
+          throw new Error('Failed to fetch');
+        },
+      ],
+    ])('(error E3-3) ante %s devuelve exactamente { ok: false }, sin el texto del error', async (_, responder) => {
+      simulacion.responderMovimientos = responder;
+
+      const resultado = await ObtenerMovimiento(idMovimiento);
+
+      expect(resultado).toEqual({ ok: false });
+      expect(JSON.stringify(resultado)).not.toMatch(/invalid input|Failed to fetch|22P02/);
+    });
+  });
+
+  describe('EditarMovimiento', () => {
+    const datosEdicion = {
+      idMovimiento: '3f2b8c1e-5a4d-4e7f-9b6a-1c2d3e4f5a6b',
+      tipo: 'GASTO',
+      monto: '2.000',
+      idCategoria: 'categoria-mercado',
+      fecha: '2026-09-18',
+    };
+
+    it('con monto "2.000" llama una vez a basp_editar_movimiento con p_monto "2000.00" y los demás parámetros, y devuelve { ok: true }', async () => {
+      const resultado = await EditarMovimiento(datosEdicion);
+
+      expect(resultado).toEqual({ ok: true });
+      expect(simulacion.llamadasRpc).toEqual([
+        {
+          nombre: 'basp_editar_movimiento',
+          parametros: {
+            p_id_movimiento: '3f2b8c1e-5a4d-4e7f-9b6a-1c2d3e4f5a6b',
+            p_tipo: 'GASTO',
+            p_monto: '2000.00',
+            p_id_categoria: 'categoria-mercado',
+            p_fecha: '2026-09-18',
+          },
+        },
+      ]);
+    });
+
+    it.each([
+      ['un rechazo BA500 (falla simulada)', () => ({ data: null, error: { code: 'BA500', message: 'Falla simulada' } })],
+      ['un rechazo BA422 (monto)', () => ({ data: null, error: { code: 'BA422', message: 'Monto inválido' } })],
+      ['una respuesta sin data', () => ({ data: null, error: null })],
+      [
+        'una excepción de red',
+        () => {
+          throw new Error('Failed to fetch');
+        },
+      ],
+    ])('(error E3-4) ante %s devuelve exactamente { ok: false }, sin el error de Supabase (FR-22)', async (_, responder) => {
+      simulacion.respuestasRpc.basp_editar_movimiento = responder;
+
+      const resultado = await EditarMovimiento(datosEdicion);
+
+      expect(simulacion.llamadasRpc).toHaveLength(1);
+      expect(simulacion.llamadasRpc[0].nombre).toBe('basp_editar_movimiento');
       expect(resultado).toEqual({ ok: false });
     });
   });

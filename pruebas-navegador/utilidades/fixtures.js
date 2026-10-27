@@ -11,14 +11,15 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { loadEnv } from 'vite';
+import {
+  CrearClienteAdministrador as CrearClienteAdministradorNuevo,
+  MarcarUsuarioPrueba as MarcarUsuarioPruebaConCliente,
+  mensajeFaltaClave,
+  mensajeLimiteInicios,
+} from '../../pruebas/utilidades/ayudantesSupabase.js';
 
-export { expect };
-
-export const mensajeFaltaClave = 'Falta SUPABASE_SERVICE_ROLE_KEY en .env.pruebas.local.';
-export const mensajeLimiteInicios =
-  'Límite de inicios anónimos de Supabase alcanzado; reintente más tarde.';
+export { expect, mensajeFaltaClave, mensajeLimiteInicios };
 
 // Sesiones guardadas (storageState) y registro de usuarios preparados. Fuera de git: tienen tokens.
 export const directorioSesionesPorDefecto = fileURLToPath(new URL('../.sesiones/', import.meta.url));
@@ -26,10 +27,6 @@ export const nombreRegistroUsuarios = 'usuarios.json';
 
 // Un usuario por especificación: corren en paralelo sin pisarse los datos.
 export const nombresUsuarios = ['sesion', 'zonaHoraria', 'rendimiento', 'accesibilidad', 'anchos'];
-
-const opcionesSinSesion = {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-};
 
 // --- Variables y clientes ---
 
@@ -57,11 +54,7 @@ let clienteAdministrador = null;
 // Cliente con la service role: salta RLS. Solo para preparar y verificar datos de prueba.
 export function CrearClienteAdministrador(variables = ObtenerVariablesPruebas()) {
   if (!clienteAdministrador) {
-    clienteAdministrador = createClient(
-      variables.urlSupabase,
-      variables.claveServicio,
-      opcionesSinSesion,
-    );
+    clienteAdministrador = CrearClienteAdministradorNuevo(variables);
   }
   return clienteAdministrador;
 }
@@ -92,12 +85,7 @@ export function ObtenerUsuarioPreparado(nombre, rutaRegistro = ObtenerRutaRegist
 }
 
 export async function MarcarUsuarioPrueba(idUsuario) {
-  const { error } = await CrearClienteAdministrador().auth.admin.updateUserById(idUsuario, {
-    app_metadata: { es_prueba: true },
-  });
-  if (error) {
-    throw new Error(`No se pudo marcar al usuario de prueba: ${error.message}`);
-  }
+  await MarcarUsuarioPruebaConCliente(CrearClienteAdministrador(), idUsuario);
 }
 
 // Ids de usuario de las sesiones de supabase-js guardadas en el localStorage de un storageState.
@@ -156,6 +144,22 @@ export function ObtenerFechaLocal(dias = 0, desde = new Date()) {
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const dia = String(fecha.getDate()).padStart(2, '0');
   return `${anio}-${mes}-${dia}`;
+}
+
+// --- Filas de la lista ---
+
+// Cada fila de la lista es un botón que abre su menú (FEAT-001b FR-01). Si la fila cambia, se
+// cambia solo aquí.
+export const selectorFilaMovimiento = '.boton-fila-movimiento';
+
+// Filas dentro de la página o de un contenedor (por ejemplo, el grupo de una fecha).
+export function ObtenerFilas(contenedor) {
+  return contenedor.locator(selectorFilaMovimiento);
+}
+
+// Fila de un movimiento por su id (atributo data-id-movimiento).
+export function ObtenerFilaPorId(pagina, idMovimiento) {
+  return pagina.locator(`${selectorFilaMovimiento}[data-id-movimiento="${idMovimiento}"]`);
 }
 
 // --- Datos con service role ---

@@ -34,3 +34,11 @@ esta conexión directa, no la service role, que no tiene ningún permiso sobre e
 - La service role conserva solo los permisos de tabla que usan las pruebas para cargar datos.
 - Activo nuevo para el threat model de FEAT-001a: la contraseña de la base (credencial, solo local, TLS verificado). Se suma al threat model en la próxima revisión de PLAN de este proyecto.
 - Correr `pruebas/` exige haber vinculado la CLI al proyecto.
+
+## Actualización FEAT-001b (2026-10-27)
+- Usos nuevos de la conexión directa, además de los de FEAT-001a: `EliminarCategoriaPrueba` hace DML
+  sobre `public.bat_categorias`, porque la service role no tiene DELETE sobre esa tabla; las pruebas de
+  edición (`pruebas/edicion.test.js`) la usan para activar el punto de falla `EDITAR_MOVIMIENTO` y
+  para leer `creado_en` antes y después de editar.
+- La contraseña de la base ya figura como activo en `docs/daw/security/threat-FEAT-001b.md` (R9):
+  credencial, solo en `.env.pruebas.local`, en tránsito con TLS verificado.

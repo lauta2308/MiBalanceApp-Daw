@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from 'react-router';
 
 // Cliente de Supabase simulado: cada consulta registra lo que se le pidió
 // (tabla, select, order, range) y responde con lo que indique la prueba.
@@ -88,6 +88,7 @@ function RenderizarSeccion() {
           <Route path="/" element={<SeccionCuenta />} />
           <Route path="/gasto/nuevo" element={<h1>Pantalla Añadir Gasto</h1>} />
           <Route path="/ingreso/nuevo" element={<h1>Pantalla Añadir Ingreso</h1>} />
+          <Route path="/movimientos/:idMovimiento/editar" element={<PantallaEditar />} />
         </Routes>
       </ProveedorMensajes>
     </MemoryRouter>,
@@ -98,6 +99,12 @@ function RenderizarSeccion() {
 function EstadoNavegacion() {
   const ubicacion = useLocation();
   return <output aria-label="Estado de la navegación">{JSON.stringify(ubicacion.state)}</output>;
+}
+
+// Pantalla de edición simulada: muestra el id del movimiento que llegó en la ruta.
+function PantallaEditar() {
+  const { idMovimiento } = useParams();
+  return <h1>{`Pantalla Editar ${idMovimiento}`}</h1>;
 }
 
 // Pantalla de formulario simulada con un botón que vuelve con "atrás" del historial.
@@ -114,10 +121,11 @@ function PantallaConAtras({ titulo }) {
 }
 
 // Cuenta montada como si se volviera de un formulario: la entrada "/" trae
-// { tipoFormulario } en el estado de la navegación.
-function RenderizarSeccionDesdeFormulario(tipoFormulario) {
+// { tipoFormulario } (alta) o el estado que se indique (edición) en el estado
+// de la navegación.
+function RenderizarSeccionDesdeFormulario(tipoFormulario, estado = { pagina: 1, tipoFormulario }) {
   render(
-    <MemoryRouter initialEntries={[{ pathname: '/', state: { pagina: 1, tipoFormulario } }]}>
+    <MemoryRouter initialEntries={[{ pathname: '/', state: estado }]}>
       <ProveedorMensajes>
         <Routes>
           <Route
@@ -131,6 +139,7 @@ function RenderizarSeccionDesdeFormulario(tipoFormulario) {
           />
           <Route path="/gasto/nuevo" element={<PantallaConAtras titulo="Pantalla Añadir Gasto" />} />
           <Route path="/ingreso/nuevo" element={<PantallaConAtras titulo="Pantalla Añadir Ingreso" />} />
+          <Route path="/movimientos/:idMovimiento/editar" element={<PantallaConAtras titulo="Pantalla Editar" />} />
         </Routes>
       </ProveedorMensajes>
     </MemoryRouter>,
@@ -139,6 +148,15 @@ function RenderizarSeccionDesdeFormulario(tipoFormulario) {
 
 function ConsultasDeMovimientos() {
   return simulacion.consultas.filter((consulta) => consulta.tabla === 'bav_movimientos');
+}
+
+// Cada fila de la lista es un botón dentro de su <li>.
+function ObtenerFilas() {
+  return screen.getAllByRole('listitem').map((elemento) => within(elemento).getByRole('button'));
+}
+
+function ObtenerFila(idMovimiento) {
+  return ObtenerFilas().find((fila) => fila.dataset.idMovimiento === idMovimiento);
 }
 
 function ObtenerSaldo() {
@@ -199,7 +217,7 @@ describe('SeccionCuenta', () => {
       .getAllByRole('heading', { level: 2 })
       .map((encabezado) => encabezado.textContent);
     expect(encabezadosFecha).toEqual(['01/10/2026', '17/09/2026']);
-    expect(screen.getAllByRole('listitem').map((fila) => fila.textContent)).toEqual([
+    expect(ObtenerFilas().map((fila) => fila.textContent)).toEqual([
       'Café-800,00',
       'Sueldo+50.000,00',
       'Mercado-1.500,00',
@@ -214,7 +232,7 @@ describe('SeccionCuenta', () => {
     RenderizarSeccion();
 
     expect(await screen.findByRole('heading', { name: '17/09/2026' })).toBeInTheDocument();
-    const fila = screen.getByRole('listitem');
+    const [fila] = ObtenerFilas();
     expect(fila.children[0]).toHaveTextContent('Mercado');
     expect(fila.children[1]).toHaveTextContent('-1.500,00');
     expect(fila).not.toHaveTextContent(/gasto/i);
@@ -242,8 +260,8 @@ describe('SeccionCuenta', () => {
     RenderizarSeccion();
 
     expect(await screen.findByText('Página 1 de 3')).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')).toHaveLength(50);
-    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Categoría 001');
+    expect(ObtenerFilas()).toHaveLength(50);
+    expect(ObtenerFilas()[0]).toHaveTextContent('Categoría 001');
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeEnabled();
     expect(ConsultasDeMovimientos().map((consulta) => consulta.range)).toEqual([[0, 49]]);
@@ -257,14 +275,14 @@ describe('SeccionCuenta', () => {
 
     await usuario.click(screen.getByRole('button', { name: 'Siguiente' }));
     expect(await screen.findByText('Página 2 de 3')).toBeInTheDocument();
-    const filasPagina2 = screen.getAllByRole('listitem');
+    const filasPagina2 = ObtenerFilas();
     expect(filasPagina2).toHaveLength(50);
     expect(filasPagina2[0]).toHaveTextContent('Categoría 051');
     expect(filasPagina2[49]).toHaveTextContent('Categoría 100');
 
     await usuario.click(screen.getByRole('button', { name: 'Siguiente' }));
     expect(await screen.findByText('Página 3 de 3')).toBeInTheDocument();
-    const filasPagina3 = screen.getAllByRole('listitem');
+    const filasPagina3 = ObtenerFilas();
     expect(filasPagina3).toHaveLength(20);
     expect(filasPagina3[0]).toHaveTextContent('Categoría 101');
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled();
@@ -288,7 +306,7 @@ describe('SeccionCuenta', () => {
     await usuario.click(screen.getByRole('button', { name: 'Anterior' }));
 
     expect(await screen.findByText('Página 1 de 3')).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Categoría 001');
+    expect(ObtenerFilas()[0]).toHaveTextContent('Categoría 001');
   });
 
   it('mientras carga la página siguiente, "Siguiente" conserva el foco y un segundo clic no pide otra página (NFR-07)', async () => {
@@ -358,7 +376,7 @@ describe('SeccionCuenta', () => {
     RenderizarSeccion();
 
     await screen.findByText('Categoría 001');
-    expect(screen.getAllByRole('listitem')).toHaveLength(30);
+    expect(ObtenerFilas()).toHaveLength(30);
     expect(screen.queryByRole('button', { name: 'Anterior' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Siguiente' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Página \d+ de \d+/)).not.toBeInTheDocument();
@@ -396,7 +414,7 @@ describe('SeccionCuenta', () => {
     const encabezadosFecha = screen.getAllByRole('heading', { level: 2 });
     expect(encabezadosFecha).toHaveLength(1);
     expect(encabezadosFecha[0]).toHaveTextContent('01/10/2026');
-    const filas = screen.getAllByRole('listitem');
+    const filas = ObtenerFilas();
     expect(filas.map((fila) => fila.children[0].textContent)).toEqual([
       'Categoría 051',
       'Categoría 052',
@@ -452,6 +470,89 @@ describe('SeccionCuenta', () => {
     await screen.findByRole('heading', { name: 'Mi Cuenta (USD)' });
     expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Añadir Gasto' }));
     expect(document.activeElement).toBe(document.body);
+  });
+
+  describe('edición desde el menú de la fila', () => {
+    const movimientosEdicion = [
+      CrearMovimiento('m3', '2026-10-01', 'GASTO', '800.00', 'Café'),
+      CrearMovimiento('m2', '2026-10-01', 'INGRESO', '50000.00', 'Sueldo'),
+      CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado'),
+    ];
+
+    it('"Editar" en el menú de una fila abre la edición de ese movimiento (FR-01)', async () => {
+      ConfigurarServidor({ movimientos: movimientosEdicion });
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+
+      fireEvent.click(ObtenerFila('m2'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Editar' }));
+
+      expect(await screen.findByRole('heading', { name: 'Pantalla Editar m2' })).toBeInTheDocument();
+    });
+
+    it('al volver de editar, con el movimiento en la página 1, enfoca su fila y limpia idMovimientoEditado del estado (D5)', async () => {
+      ConfigurarServidor({ movimientos: movimientosEdicion });
+      RenderizarSeccionDesdeFormulario(null, { pagina: 1, idMovimientoEditado: 'm1' });
+      await screen.findByText('Mercado');
+
+      await vi.waitFor(() => expect(document.activeElement).toBe(ObtenerFila('m1')));
+      await vi.waitFor(() =>
+        expect(screen.getByLabelText('Estado de la navegación').textContent).not.toMatch(
+          /idMovimientoEditado/,
+        ),
+      );
+      expect(document.activeElement).toBe(ObtenerFila('m1'));
+    });
+
+    it('al volver de editar, si el movimiento no está en la página 1, enfoca la primera fila (D5)', async () => {
+      ConfigurarServidor({ movimientos: CrearMovimientos(120) });
+      RenderizarSeccionDesdeFormulario(null, { pagina: 1, idMovimientoEditado: 'mov-075' });
+      await screen.findByText('Página 1 de 3');
+
+      await vi.waitFor(() => expect(document.activeElement).toBe(ObtenerFilas()[0]));
+      expect(ObtenerFilas()[0]).toHaveTextContent('Categoría 001');
+    });
+
+    it('al volver de cancelar la edición (sin "pagina" en el estado) también enfoca la fila editada', async () => {
+      ConfigurarServidor({ movimientos: movimientosEdicion });
+      RenderizarSeccionDesdeFormulario(null, { idMovimientoEditado: 'm3' });
+      await screen.findByText('Café');
+
+      await vi.waitFor(() => expect(document.activeElement).toBe(ObtenerFila('m3')));
+    });
+
+    it('al volver con "atrás" del historial a la entrada que trajo idMovimientoEditado, no fuerza el foco', async () => {
+      ConfigurarServidor({ movimientos: movimientosEdicion });
+      RenderizarSeccionDesdeFormulario(null, { pagina: 1, idMovimientoEditado: 'm1' });
+      await screen.findByText('Mercado');
+      await vi.waitFor(() => expect(document.activeElement).toBe(ObtenerFila('m1')));
+      await vi.waitFor(() =>
+        expect(screen.getByLabelText('Estado de la navegación').textContent).not.toMatch(
+          /idMovimientoEditado/,
+        ),
+      );
+
+      fireEvent.click(ObtenerFila('m2'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Editar' }));
+      await screen.findByRole('heading', { name: 'Pantalla Editar' });
+      document.activeElement.blur();
+      fireEvent.click(screen.getByRole('button', { name: 'Atrás del Historial' }));
+
+      await screen.findByText('Mercado');
+      expect(document.activeElement).toBe(document.body);
+    });
+
+    it('sin movimientos, volver de editar no falla ni fuerza el foco', async () => {
+      RenderizarSeccionDesdeFormulario(null, { pagina: 1, idMovimientoEditado: 'm1' });
+      await screen.findByText(mensajeSinMovimientos);
+
+      expect(document.activeElement).toBe(document.body);
+      await vi.waitFor(() =>
+        expect(screen.getByLabelText('Estado de la navegación').textContent).not.toMatch(
+          /idMovimientoEditado/,
+        ),
+      );
+    });
   });
 
   it('"Añadir Ingreso" abre el formulario de ingreso', async () => {

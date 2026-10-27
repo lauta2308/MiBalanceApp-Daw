@@ -1,12 +1,16 @@
 // Accesibilidad (NFR-07, NFR-08): uso solo con teclado y foco visible (AC-61), y contraste de
-// textos e íconos medido con axe-core (AC-62).
+// textos e íconos medido con axe-core (AC-62). Edición (FEAT-001b NFR-04, NFR-06): el menú de la
+// fila y el formulario de edición solo con el teclado (AC-27) y su contraste con axe-core (AC-29).
 
 import AxeBuilder from '@axe-core/playwright';
 import {
   CargarCategoria,
   CargarMovimientos,
+  CrearClienteAdministrador,
   CrearMovimientosAnteriores,
   ObtenerFechaLocal,
+  ObtenerFilaPorId,
+  ObtenerFilas,
   expect,
   test,
 } from './utilidades/fixtures.js';
@@ -60,6 +64,9 @@ async function EsperarFocoVisibleEn(pagina, elemento, paso) {
   await VerificarFocoVisible(pagina, paso);
 }
 
+// Pasos de Tab para recorrer una página entera de la lista: 50 filas más los botones de Cuenta.
+const maximoTabsPagina = 60;
+
 function FormatearFechaPantalla(textoFecha) {
   const [anio, mes, dia] = textoFecha.split('-');
   return `${dia}/${mes}/${anio}`;
@@ -88,7 +95,8 @@ test('solo con el teclado se pagina y se registran un gasto y un ingreso, con fo
   // se deshabilita y el foco pasa a "Siguiente".
   const botonAnterior = pagina.getByRole('button', { name: 'Anterior' });
   const botonSiguiente = pagina.getByRole('button', { name: 'Siguiente' });
-  await TabularHasta(pagina, botonSiguiente);
+  // Las 50 filas de la página son botones (FEAT-001b FR-01): Tab pasa por cada una.
+  await TabularHasta(pagina, botonSiguiente, { maximo: maximoTabsPagina });
   await Presionar(pagina, 'Enter', 'Siguiente');
   await expect(pagina.getByText('Página 2 de 3')).toBeVisible();
   await EsperarFocoVisibleEn(pagina, botonSiguiente, 'página 2');
@@ -105,7 +113,7 @@ test('solo con el teclado se pagina y se registran un gasto y un ingreso, con fo
   await EsperarFocoVisibleEn(pagina, botonSiguiente, 'de vuelta en la página 1');
 
   // Gasto: categoría con el selector y fecha con el calendario.
-  await TabularHasta(pagina, botonGasto, { atras: true });
+  await TabularHasta(pagina, botonGasto, { atras: true, maximo: maximoTabsPagina });
   await pagina.keyboard.press('Enter');
   await expect(pagina.getByRole('heading', { level: 1, name: 'Añadir Gasto' })).toBeVisible();
   const flecha = pagina.getByRole('button', { name: 'Volver atrás' });
@@ -149,11 +157,11 @@ test('solo con el teclado se pagina y se registran un gasto y un ingreso, con fo
   await expect(pagina.getByText('Ingreso registrado con éxito.')).toBeVisible();
   await expect(pagina.getByText('USD 10.050,00', { exact: true })).toBeVisible();
   await EsperarFocoVisibleEn(pagina, botonIngreso, 'Cuenta tras guardar el ingreso');
-  await expect(pagina.getByRole('listitem').nth(0)).toHaveText('Pago Ingresado+200,00');
+  await expect(ObtenerFilas(pagina).nth(0)).toHaveText('Pago Ingresado+200,00');
   const grupoAyer = pagina.locator('.grupo-movimientos').filter({
     has: pagina.getByRole('heading', { level: 2, name: FormatearFechaPantalla(ayer) }),
   });
-  await expect(grupoAyer.getByRole('listitem').first()).toHaveText('Mercado-150,00');
+  await expect(ObtenerFilas(grupoAyer).first()).toHaveText('Mercado-150,00');
   await expect(
     pagina.getByRole('heading', { level: 2, name: FormatearFechaPantalla(hoy) }),
   ).toBeVisible();
@@ -180,6 +188,144 @@ test('solo con el teclado se pagina y se registran un gasto y un ingreso, con fo
   await pagina.keyboard.press('Enter');
   await expect(pagina.getByRole('heading', { name: 'Mi Cuenta (USD)' })).toBeVisible();
   await EsperarFocoVisibleEn(pagina, botonGasto, 'Cuenta tras la flecha');
+});
+
+// --- Edición solo con el teclado (FEAT-001b AC-27) ---
+
+// Presiona la flecha hacia abajo en el selector nativo (con el foco, sin abrir la lista) hasta que
+// quede elegida la opción, verificando el foco visible en cada paso.
+async function ElegirOpcionConFlechas(pagina, selector, textoOpcion, maximo = 5) {
+  const opcionElegida = selector.locator('option:checked');
+  for (let paso = 0; paso < maximo; paso += 1) {
+    if ((await opcionElegida.textContent()) === textoOpcion) {
+      return;
+    }
+    await Presionar(pagina, 'ArrowDown', `categoría hacia ${textoOpcion}`);
+  }
+  await expect(opcionElegida).toHaveText(textoOpcion);
+}
+
+test('solo con el teclado se abre el menú de una fila, se elige "Editar", se cambian el tipo, la categoría, la fecha y el monto y se guarda, con foco visible en cada paso (AC-27)', async ({
+  paginaConUsuario: pagina,
+  usuario,
+}) => {
+  test.setTimeout(120_000);
+  const idSueldo = await CargarCategoria(usuario.idCuenta, 'Sueldo', 'INGRESO');
+  const fechaGasto = ObtenerFechaLocal(-2);
+  const fechaNueva = ObtenerFechaLocal(-3);
+  await CargarMovimientos(usuario.idCuenta, [
+    { tipo: 'INGRESO', monto: '10000.00', fecha: '2026-01-01' },
+    { tipo: 'GASTO', monto: '3000.00', fecha: fechaGasto },
+  ]);
+
+  await pagina.goto('/');
+  await expect(pagina.getByText('USD 7.000,00', { exact: true })).toBeVisible();
+  const filaGasto = ObtenerFilas(pagina).first();
+  await expect(filaGasto).toHaveText('Pago Realizado-3.000,00');
+  const idMovimiento = await filaGasto.getAttribute('data-id-movimiento');
+  const filaEditada = ObtenerFilaPorId(pagina, idMovimiento);
+
+  // Menú de la fila: Enter lo abre con el foco en "Editar", Escape lo cierra y vuelve a la fila,
+  // y la flecha hacia abajo también lo abre.
+  await TabularHasta(pagina, filaGasto);
+  await Presionar(pagina, 'Enter', 'abrir el menú de la fila');
+  const menu = pagina.getByRole('menu');
+  await expect(menu).toBeVisible();
+  const opcionEditar = menu.getByRole('menuitem', { name: 'Editar' });
+  await EsperarFocoVisibleEn(pagina, opcionEditar, 'Editar al abrir el menú con Enter');
+  await Presionar(pagina, 'Escape', 'cerrar el menú');
+  await expect(menu).toBeHidden();
+  await EsperarFocoVisibleEn(pagina, filaGasto, 'fila tras cerrar el menú con Escape');
+  await Presionar(pagina, 'ArrowDown', 'abrir el menú con la flecha');
+  await EsperarFocoVisibleEn(pagina, opcionEditar, 'Editar al abrir el menú con la flecha');
+  await pagina.keyboard.press('Enter');
+
+  await expect(pagina.getByRole('heading', { level: 1, name: 'Editar Movimiento' })).toBeVisible();
+  const selectorCategoria = pagina.getByLabel('Categoría');
+  await expect(selectorCategoria).toBeEnabled();
+  await expect(selectorCategoria.locator('option:checked')).toHaveText('Pago Realizado');
+
+  // Tipo: radios nativos; la flecha elige "Ingreso" y la categoría pasa a "Pago Ingresado".
+  const radioGasto = pagina.getByRole('radio', { name: 'Gasto', exact: true });
+  const radioIngreso = pagina.getByRole('radio', { name: 'Ingreso', exact: true });
+  await expect(radioGasto).toBeChecked();
+  await TabularHasta(pagina, radioGasto);
+  await Presionar(pagina, 'ArrowRight', 'tipo Ingreso');
+  await expect(radioIngreso).toBeChecked();
+  await EsperarFocoVisibleEn(pagina, radioIngreso, 'tipo Ingreso elegido');
+  await expect(selectorCategoria).toBeEnabled();
+  await expect(selectorCategoria.locator('option:checked')).toHaveText('Pago Ingresado');
+
+  // Monto: Tab hasta el campo, se selecciona todo y se escribe el nuevo.
+  const campoMonto = pagina.getByLabel('Monto');
+  await expect(campoMonto).toHaveValue('3.000,00');
+  await TabularHasta(pagina, campoMonto);
+  await Presionar(pagina, 'Control+A', 'seleccionar el monto');
+  await pagina.keyboard.type('2500');
+  await expect(campoMonto).toHaveValue('2.500');
+
+  // Categoría: el selector nativo con las flechas.
+  await TabularHasta(pagina, selectorCategoria);
+  await ElegirOpcionConFlechas(pagina, selectorCategoria, 'Sueldo');
+
+  // Fecha: el calendario se abre con el día del movimiento y la flecha elige el anterior.
+  const campoFecha = pagina.getByLabel('Fecha');
+  await expect(campoFecha).toHaveText(FormatearFechaPantalla(fechaGasto));
+  await TabularHasta(pagina, campoFecha);
+  await Presionar(pagina, 'Enter', 'abrir el calendario');
+  const calendario = pagina.getByRole('dialog', { name: 'Calendario' });
+  await expect(calendario).toBeVisible();
+  await Presionar(pagina, 'ArrowLeft', 'día anterior');
+  await pagina.keyboard.press('Enter');
+  await expect(calendario).toBeHidden();
+  await EsperarFocoVisibleEn(pagina, campoFecha, 'campo Fecha tras elegir el día');
+  await expect(campoFecha).toHaveText(FormatearFechaPantalla(fechaNueva));
+
+  await TabularHasta(pagina, pagina.getByRole('button', { name: 'Guardar' }));
+  await pagina.keyboard.press('Enter');
+
+  // Vuelta a Cuenta con el foco visible en la fila editada (D5), ahora un ingreso de 2.500,00.
+  await expect(pagina.getByText('Movimiento actualizado con éxito.')).toBeVisible();
+  await expect(pagina.getByRole('img', { name: 'Éxito' })).toBeVisible();
+  await expect(pagina.getByText('USD 12.500,00', { exact: true })).toBeVisible();
+  await expect(filaEditada).toHaveText('Sueldo+2.500,00');
+  const grupoNuevo = pagina.locator('.grupo-movimientos').filter({
+    has: pagina.getByRole('heading', { level: 2, name: FormatearFechaPantalla(fechaNueva) }),
+  });
+  await expect(ObtenerFilas(grupoNuevo)).toHaveText(['Sueldo+2.500,00']);
+  await EsperarFocoVisibleEn(pagina, filaEditada, 'fila editada tras guardar');
+
+  const { data, error } = await CrearClienteAdministrador()
+    .from('bat_movimientos')
+    .select('tipo, monto::text, fecha, id_categoria')
+    .eq('id', idMovimiento)
+    .single();
+  expect(error).toBeNull();
+  expect(data).toEqual({ tipo: 'INGRESO', monto: '2500.00', fecha: fechaNueva, id_categoria: idSueldo });
+});
+
+// MenuMovimiento cierra el menú ante un clic afuera y devuelve el foco a la fila. Con un clic en
+// una zona no enfocable, el navegador mueve el foco al documento después del pointerdown: esta
+// prueba verifica en un navegador real que el foco no se pierde.
+test('un clic afuera del menú, en una zona no enfocable, lo cierra y deja el foco en la fila', async ({
+  paginaConUsuario: pagina,
+  usuario,
+}) => {
+  await CargarMovimientos(usuario.idCuenta, [
+    { tipo: 'INGRESO', monto: '10000.00', fecha: '2026-01-01' },
+    { tipo: 'GASTO', monto: '3000.00', fecha: ObtenerFechaLocal(-2) },
+  ]);
+  await pagina.goto('/');
+  await expect(pagina.getByText('USD 7.000,00', { exact: true })).toBeVisible();
+  const fila = ObtenerFilas(pagina).first();
+  await fila.click();
+  const menu = pagina.getByRole('menu');
+  await expect(menu.getByRole('menuitem', { name: 'Editar' })).toBeFocused();
+
+  await pagina.getByRole('heading', { name: 'Mi Cuenta (USD)' }).click();
+  await expect(menu).toBeHidden();
+  const elementoConFoco = await pagina.evaluate(() => document.activeElement?.tagName);
+  await expect(fila, `foco tras el clic afuera: ${elementoConFoco}`).toBeFocused();
 });
 
 // --- Contraste (AC-62) ---
@@ -261,7 +407,7 @@ test.describe('contraste con axe-core (AC-62)', () => {
     await pagina.goto('/');
     await expect(pagina.getByText('USD 0,00', { exact: true })).toBeVisible();
     await expect(pagina.getByText('Página 1 de 3')).toBeVisible();
-    await expect(pagina.getByRole('listitem')).toHaveCount(50);
+    await expect(ObtenerFilas(pagina)).toHaveCount(50);
     await AnalizarContraste(pagina, 'Cuenta, saldo cero con lista, página 1');
 
     await pagina.getByRole('button', { name: 'Siguiente' }).click();
@@ -333,4 +479,51 @@ test.describe('contraste con axe-core (AC-62)', () => {
       });
     });
   }
+
+  test('el menú de la fila abierto y el formulario de edición con el selector de tipo, el de categoría y el calendario abiertos no tienen violaciones de color-contrast (AC-29)', async ({
+    paginaConUsuario: pagina,
+    usuario,
+  }) => {
+    const idMercado = await CargarCategoria(usuario.idCuenta, 'Mercado', 'GASTO');
+    await CargarMovimientos(usuario.idCuenta, [
+      { tipo: 'INGRESO', monto: '10000.00', fecha: '2026-01-01' },
+      { tipo: 'GASTO', monto: '1500.00', fecha: ObtenerFechaLocal(-1), idCategoria: idMercado },
+    ]);
+    await pagina.goto('/');
+    await expect(pagina.getByText('USD 8.500,00', { exact: true })).toBeVisible();
+
+    await ObtenerFilas(pagina).first().click();
+    const menu = pagina.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await AnalizarContraste(pagina, 'Cuenta con el menú de la fila abierto');
+    await AnalizarContraste(pagina, 'menú de la fila', { incluir: '[role="menu"]' });
+
+    await menu.getByRole('menuitem', { name: 'Editar' }).click();
+    await expect(pagina.getByRole('heading', { level: 1, name: 'Editar Movimiento' })).toBeVisible();
+    const selectorCategoria = pagina.getByLabel('Categoría');
+    await expect(selectorCategoria).toBeEnabled();
+    await AnalizarContraste(pagina, 'Editar Movimiento');
+
+    // Selector de tipo con el foco, después de elegir "Ingreso" (la categoría pasa a la del tipo).
+    const radioIngreso = pagina.getByRole('radio', { name: 'Ingreso', exact: true });
+    await radioIngreso.check();
+    await expect(selectorCategoria.locator('option:checked')).toHaveText('Pago Ingresado');
+    await radioIngreso.focus();
+    await AnalizarContraste(pagina, 'Editar Movimiento, selector de tipo');
+
+    // Selector de categoría con el foco (la lista nativa abierta no forma parte del documento) y
+    // calendario abierto.
+    await expect(selectorCategoria).toBeEnabled();
+    await selectorCategoria.focus();
+    await AnalizarContraste(pagina, 'Editar Movimiento, selector de categoría');
+    await pagina.getByLabel('Fecha').click();
+    await expect(pagina.getByRole('dialog', { name: 'Calendario' })).toBeVisible();
+    await AnalizarContraste(pagina, 'Editar Movimiento, calendario abierto');
+    await pagina.keyboard.press('Escape');
+
+    await pagina.getByRole('button', { name: 'Guardar' }).click();
+    await expect(pagina.getByText('Movimiento actualizado con éxito.')).toBeVisible();
+    await expect(pagina.getByText('USD 11.500,00', { exact: true })).toBeVisible();
+    await AnalizarContraste(pagina, 'Cuenta tras editar, mensaje de éxito');
+  });
 });

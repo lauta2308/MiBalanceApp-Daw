@@ -57,6 +57,8 @@ files and **propose the text for you to paste here**. You always confirm it.
 npm install
 npm run dev
 npm test
+npm run lint
+npm run test:navegador
 ```
 
 - Requiere `.env.local` (ver `.env.example`) y las migraciones de `supabase/migrations/` ejecutadas en orden.

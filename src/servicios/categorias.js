@@ -2,12 +2,7 @@
 // FR-18). Nunca expone el error de Supabase (NFR-06): devuelve
 // { ok: true, categorias } o { ok: false }.
 import { OrdenarCategorias } from '../utilidades/categorias.js';
-
-// Importación dinámica del cliente: ver el comentario en cuenta.js.
-async function ObtenerCliente() {
-  const { clienteSupabase } = await import('./clienteSupabase.js');
-  return clienteSupabase;
-}
+import { ObtenerCliente } from './obtenerCliente.js';
 
 // Solo las categorías del tipo pedido ('GASTO' | 'INGRESO'), con la por defecto
 // primero y el resto en orden alfabético (FR-16, FR-17). Sin filas también es

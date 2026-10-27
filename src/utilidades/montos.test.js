@@ -33,6 +33,10 @@ describe('FormatearMonto', () => {
     expect(FormatearMonto('1999999999999.98')).toBe('1.999.999.999.999,98');
   });
 
+  it('convierte el monto de la API en el texto del campo de edición, sin signo (FR-03)', () => {
+    expect(FormatearMonto('1500.00')).toBe('1.500,00');
+  });
+
   it('formatea más de 15 dígitos sin pérdida de precisión', () => {
     expect(FormatearMonto('12345678901234567.89')).toBe('12.345.678.901.234.567,89');
   });

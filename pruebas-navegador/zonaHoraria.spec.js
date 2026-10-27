@@ -4,6 +4,7 @@
 import {
   CargarMovimientos,
   CrearClienteAdministrador,
+  ObtenerFilas,
   expect,
   test,
 } from './utilidades/fixtures.js';
@@ -38,7 +39,7 @@ test('en UTC-3 a las 23:30 del 03/10/2026, "Añadir Gasto" preselecciona 03/10/2
   const grupo = pagina.locator('.grupo-movimientos').filter({
     has: pagina.getByRole('heading', { level: 2, name: '03/10/2026' }),
   });
-  await expect(grupo.getByRole('listitem')).toHaveText(['Pago Realizado-100,00']);
+  await expect(ObtenerFilas(grupo)).toHaveText(['Pago Realizado-100,00']);
 
   const { data, error } = await CrearClienteAdministrador()
     .from('bat_movimientos')
