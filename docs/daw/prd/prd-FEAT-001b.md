@@ -6,7 +6,7 @@
 | Ticket padre | FEAT-001 (Cuenta y Movimientos) |
 | Tracker | none |
 | Date | 2026-10-25 |
-| PRD loops | 2 |
+| PRD loops | 3 |
 
 > Sub-ticket de FEAT-001. Deriva de `docs/daw/prd/PRD.md` (PRD-001) y `docs/daw/prd/INTERFAZ.md`.
 > Cada requerimiento indica entre paréntesis su origen: `RF-xx` y `RNF-xx` de `PRD.md`, `UI-xx` de
@@ -56,6 +56,9 @@ permite editar un movimiento existente desde la lista, recalculando el saldo de 
 - FR-12 (RF-63): El sistema debe recalcular el saldo de la cuenta al editar el monto o el tipo de un movimiento.
 - FR-13 (RF-48): El sistema debe conservar el momento del alta de un movimiento al editarlo, de modo que su orden dentro de una misma fecha no cambie.
 - FR-14 (RF-39, RF-41, RF-42, RF-43, RF-107): El sistema debe rechazar desde la API la edición de un movimiento con monto no mayor a 0, mayor a 999.999.999.999,99 o con más de dos decimales, con una categoría de otro tipo, o con fecha posterior a la de mañana en UTC, sin modificar el movimiento ni el saldo.
+- FR-23 (RF-44): El sistema debe aplicar al texto pegado en el campo de monto del formulario de edición el mismo filtro que el alta (FEAT-001a FR-27): solo se conservan los dígitos y la primera coma.
+- FR-24 (RF-37, UI-05): El sistema debe mostrar en el formulario de edición el campo "Fecha" con el formato DD/MM/AAAA y el calendario en español con la semana de lunes a domingo, igual que el alta (FEAT-001a FR-48).
+- FR-25 (RF-06 a RF-14): El sistema debe mantener el rechazo de FEAT-001a FR-50 a la modificación directa del saldo de la cuenta desde la API, ampliando su excepción a los cambios del saldo que produce la edición de movimientos (FR-12).
 
 **Formulario**
 
@@ -106,6 +109,9 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - AC-12 (FR-13; origen: PRD AC-37): WHEN el usuario A con un gasto en "Café" y, dado de alta después, un gasto en "Mercado", ambos del 01/10/2026, edita el monto del gasto en "Café" y guarda, THE sistema SHALL seguir mostrando en el grupo "01/10/2026" a "Mercado" antes que "Café".
 - AC-13 (FR-14; origen: PRD AC-49): IF el usuario A con saldo USD 10.000,00, un gasto de 3.000 y una categoría de ingresos "Sueldo" intenta editar directamente desde la API ese gasto con monto 0, con monto -50, con monto 1000000000000.00, con monto 10.555 o con la categoría "Sueldo", THEN THE sistema SHALL rechazar las cinco operaciones, no modificar el movimiento y mantener el saldo en USD 10.000,00.
 - AC-14 (FR-14; origen: PRD AC-131): IF el usuario A con saldo USD 10.000,00 y un gasto de 3.000 intenta editar directamente desde la API ese gasto con una fecha dos días posterior a la fecha actual en UTC, THEN THE sistema SHALL rechazar la operación, no modificar el movimiento y mantener el saldo en USD 10.000,00.
+- AC-31 (FR-23): WHEN el usuario A en el formulario de edición de un gasto de 3.000 borra el monto y pega "$ 1.500,50", y después pega "abc" con el campo mostrando "1.500,50", THE sistema SHALL mostrar "1.500,50" en ambos casos.
+- AC-32 (FR-24): WHEN el usuario A el 03/10/2026 elige "Editar" en el menú de la fila de un gasto del 17/09/2026 y abre el calendario, THE sistema SHALL mostrar el campo "Fecha" con "17/09/2026" y el calendario de septiembre de 2026 con el nombre del mes y de los días en español y la semana empezando el lunes.
+- AC-33 (FR-25): IF el usuario A con saldo USD 10.000,00, que ya incluye un gasto de 3.000, edita ese gasto a 2000 y guarda, y después intenta desde la API cambiar el saldo de su cuenta a 1000000, THEN THE sistema SHALL aceptar la edición con el saldo "USD 11.000,00", rechazar el cambio directo del saldo y seguir mostrando el saldo "USD 11.000,00".
 
 **Formulario**
 
