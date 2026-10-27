@@ -9,8 +9,10 @@ const textoSinMovimientos = 'Aquí verá sus movimientos.';
 // Lista de UNA página de movimientos agrupada por fecha (FR-35, FR-47): cada
 // fila muestra la categoría a la izquierda y el monto con signo a la derecha,
 // sin el tipo ni la moneda (FR-36), en rojo o verde (FR-37). Cada fila es un
-// botón que abre su menú (FEAT-001b FR-01); solo hay un menú abierto a la vez.
-export function ListaMovimientos({ movimientos, total, alEditar }) {
+// botón que abre su menú (FEAT-001b FR-01; FEAT-001c FR-01); solo hay un menú
+// abierto a la vez. "Eliminar" entrega también el botón de la fila, al que
+// vuelve el foco si se cancela o falla la eliminación.
+export function ListaMovimientos({ movimientos, total, alEditar, alEliminar }) {
   const [idMenuAbierto, EstablecerIdMenuAbierto] = useState(null);
   const CerrarMenu = useCallback(() => EstablecerIdMenuAbierto(null), []);
 
@@ -36,6 +38,10 @@ export function ListaMovimientos({ movimientos, total, alEditar }) {
                   CerrarMenu();
                   alEditar(movimiento.id);
                 }}
+                alEliminar={(botonFila) => {
+                  CerrarMenu();
+                  alEliminar(movimiento.id, botonFila);
+                }}
               />
             ))}
           </ul>
@@ -48,7 +54,14 @@ export function ListaMovimientos({ movimientos, total, alEditar }) {
 // Botón de menú según el patrón APG: el menú toma su nombre del texto de la
 // fila (aria-labelledby) y la fila lo controla mientras está abierto
 // (aria-controls). La flecha hacia abajo también lo abre (NFR-04).
-function FilaMovimiento({ movimiento, menuAbierto, alAlternarMenu, alCerrarMenu, alEditar }) {
+function FilaMovimiento({
+  movimiento,
+  menuAbierto,
+  alAlternarMenu,
+  alCerrarMenu,
+  alEditar,
+  alEliminar,
+}) {
   const botonFila = useRef(null);
   const idBotonFila = useId();
   const idMenu = useId();
@@ -87,6 +100,7 @@ function FilaMovimiento({ movimiento, menuAbierto, alAlternarMenu, alCerrarMenu,
           idBotonFila={idBotonFila}
           botonFila={botonFila}
           alEditar={alEditar}
+          alEliminar={() => alEliminar(botonFila.current)}
           alCerrar={alCerrarMenu}
         />
       )}
