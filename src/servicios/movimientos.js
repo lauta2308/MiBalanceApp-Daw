@@ -2,15 +2,10 @@
 // Nunca expone el error de Supabase (NFR-06): devuelve { ok: true, ... } o
 // { ok: false }.
 import { ConvertirMontoParaApi } from '../utilidades/montos.js';
+import { ObtenerCliente } from './obtenerCliente.js';
 
 // La lista siempre se pide de a 50 filas: nunca se cargan todos los movimientos.
 export const tamanoPaginaMovimientos = 50;
-
-// Importación dinámica del cliente: ver el comentario en cuenta.js.
-async function ObtenerCliente() {
-  const { clienteSupabase } = await import('./clienteSupabase.js');
-  return clienteSupabase;
-}
 
 export async function ObtenerPaginaMovimientos(numeroPagina) {
   const desde = (numeroPagina - 1) * tamanoPaginaMovimientos;

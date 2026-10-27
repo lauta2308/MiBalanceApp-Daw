@@ -1,13 +1,6 @@
 // Lectura de la cuenta del usuario (FR-06, FR-07). Nunca expone el error de
 // Supabase (NFR-06): devuelve { ok: true, cuenta } o { ok: false }.
-
-// El cliente se importa de forma dinámica, como en sesionAnonima.js, porque
-// clienteSupabase.js lanza al cargarse si faltan las variables de entorno: así
-// esa falla se convierte en { ok: false } en lugar de dejar la pantalla en blanco.
-async function ObtenerCliente() {
-  const { clienteSupabase } = await import('./clienteSupabase.js');
-  return clienteSupabase;
-}
+import { ObtenerCliente } from './obtenerCliente.js';
 
 export async function ObtenerCuenta() {
   try {

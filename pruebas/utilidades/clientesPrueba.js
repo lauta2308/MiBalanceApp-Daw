@@ -12,6 +12,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
+import {
+  CrearClienteAdministrador as CrearClienteAdministradorNuevo,
+  MarcarUsuarioPrueba,
+  mensajeLimiteInicios,
+} from './ayudantesSupabase.js';
 
 const rutaRaiz = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -40,11 +45,10 @@ let clienteAdministrador = null;
 // Cliente con la service role: salta RLS. Solo para preparar y verificar datos de prueba.
 export function CrearClienteAdministrador() {
   if (!clienteAdministrador) {
-    clienteAdministrador = createClient(
-      ObtenerUrlSupabase(),
-      ObtenerVariable('SUPABASE_SERVICE_ROLE_KEY', '.env.pruebas.local'),
-      opcionesSinSesionPersistente,
-    );
+    clienteAdministrador = CrearClienteAdministradorNuevo({
+      urlSupabase: ObtenerUrlSupabase(),
+      claveServicio: ObtenerVariable('SUPABASE_SERVICE_ROLE_KEY', '.env.pruebas.local'),
+    });
   }
   return clienteAdministrador;
 }
@@ -61,19 +65,13 @@ export async function CrearUsuarioPrueba({ marcar = true } = {}) {
   const { data, error } = await cliente.auth.signInAnonymously();
   if (error) {
     if (error.status === 429) {
-      throw new Error('Límite de inicios anónimos de Supabase alcanzado; reintente más tarde.');
+      throw new Error(mensajeLimiteInicios);
     }
     throw new Error(`No se pudo iniciar la sesión anónima de prueba: ${error.message}`);
   }
   const idUsuario = data.user.id;
   if (marcar) {
-    const { error: errorMarca } = await CrearClienteAdministrador().auth.admin.updateUserById(
-      idUsuario,
-      { app_metadata: { es_prueba: true } },
-    );
-    if (errorMarca) {
-      throw new Error(`No se pudo marcar al usuario de prueba: ${errorMarca.message}`);
-    }
+    await MarcarUsuarioPrueba(CrearClienteAdministrador(), idUsuario);
   }
   return { cliente, idUsuario };
 }
