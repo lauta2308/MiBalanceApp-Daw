@@ -50,4 +50,25 @@ describe('MensajeError', () => {
     expect(alAceptar).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });
+
+  // FR-44, AC-72: un clic en el fondo o en el texto no le saca el foco a
+  // "Aceptar"; jsdom no mueve el foco con el mousedown, así que se verifica
+  // que se cancele (en Chrome lo prueba accesibilidad.spec.js).
+  it.each([
+    ['el fondo', () => document.querySelector('.fondo-mensaje-error')],
+    ['el texto del mensaje', () => screen.getByText(mensajeMonto)],
+  ])('un mousedown sobre %s se cancela y el foco sigue en "Aceptar"', (_, ObtenerZona) => {
+    RenderizarConControlesAlrededor();
+
+    const evento = fireEvent.mouseDown(ObtenerZona());
+
+    expect(evento).toBe(false);
+    expect(screen.getByRole('button', { name: 'Aceptar' })).toHaveFocus();
+  });
+
+  it('un mousedown sobre "Aceptar" no se cancela', () => {
+    RenderizarConControlesAlrededor();
+
+    expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'Aceptar' }))).toBe(true);
+  });
 });
