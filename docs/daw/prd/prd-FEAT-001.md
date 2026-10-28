@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | FEAT-001a | Cuenta, Saldo, Alta y Lista de Movimientos | prd-FEAT-001a.md | ninguna | done — en el PR #1, se integra a main con su merge |
 | FEAT-001b | Edición de Movimientos | prd-FEAT-001b.md | depende de a | done — PR #2 mergeado en main (02bdeae) |
-| FEAT-001c | Eliminación de Movimientos | prd-FEAT-001c.md | depende de a y b | active |
+| FEAT-001c | Eliminación de Movimientos | prd-FEAT-001c.md | depende de a y b | done — PR #3 mergeado en main (3ea5b00) |
 
 ## Orden de implementación sugerido
 
