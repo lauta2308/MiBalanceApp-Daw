@@ -667,6 +667,56 @@ describe('SeccionCuenta', () => {
     expect(screen.queryByText(/^USD /)).not.toBeInTheDocument();
   });
 
+  it('(AC-70, FR-45) con un movimiento de monto "abc" muestra el error de carga en lugar de quedar vacía, y "Aceptar" con datos válidos muestra la lista y el saldo', async () => {
+    const usuario = userEvent.setup();
+    ConfigurarServidor({
+      cuenta: CrearCuenta('8500.00'),
+      movimientos: [
+        CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado'),
+        CrearMovimiento('m2', '2026-09-16', 'GASTO', 'abc', 'Café'),
+      ],
+    });
+    RenderizarSeccion();
+
+    const dialogo = await screen.findByRole('alertdialog');
+    expect(dialogo).toHaveTextContent(mensajeErrorCarga);
+    expect(within(dialogo).getByRole('button', { name: 'Aceptar' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+
+    ConfigurarServidor({
+      cuenta: CrearCuenta('8500.00'),
+      movimientos: [CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado')],
+    });
+    await usuario.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(await screen.findByText('USD 8.500,00')).toBeInTheDocument();
+    expect(screen.getByText('-1.500,00')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('(AC-70, FR-45) con la cuenta con saldo "abc" muestra el error de carga en lugar de quedar vacía, y "Aceptar" con datos válidos muestra la lista y el saldo', async () => {
+    const usuario = userEvent.setup();
+    ConfigurarServidor({
+      cuenta: CrearCuenta('abc'),
+      movimientos: [CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado')],
+    });
+    RenderizarSeccion();
+
+    const dialogo = await screen.findByRole('alertdialog');
+    expect(dialogo).toHaveTextContent(mensajeErrorCarga);
+    expect(screen.queryByText(/^USD /)).not.toBeInTheDocument();
+
+    ConfigurarServidor({
+      cuenta: CrearCuenta('8500.00'),
+      movimientos: [CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado')],
+    });
+    await usuario.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(await screen.findByText('USD 8.500,00')).toBeInTheDocument();
+    expect(screen.getByText('-1.500,00')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
   it('nunca pide más de 50 filas al servidor', async () => {
     ConfigurarServidor({ movimientos: CrearMovimientos(120) });
     RenderizarSeccion();

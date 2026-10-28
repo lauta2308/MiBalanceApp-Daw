@@ -43,4 +43,20 @@ describe('ObtenerCuenta', () => {
     expect(simulacion.consultas[0].vista).toBe('bav_cuenta');
     expect(resultado).toEqual({ ok: false });
   });
+
+  it('(FR-45) con un saldo de formato inesperado ("abc") devuelve exactamente { ok: false }', async () => {
+    simulacion.responder = () => ({
+      data: [{ id: 'cuenta-a', nombre: 'Mi Cuenta', moneda: 'USD', saldo: 'abc' }],
+      error: null,
+    });
+
+    await expect(ObtenerCuenta()).resolves.toEqual({ ok: false });
+  });
+
+  it('con un saldo negativo ("-1000.00") devuelve la cuenta tal como llega', async () => {
+    const cuenta = { id: 'cuenta-a', nombre: 'Mi Cuenta', moneda: 'USD', saldo: '-1000.00' };
+    simulacion.responder = () => ({ data: [{ ...cuenta }], error: null });
+
+    await expect(ObtenerCuenta()).resolves.toEqual({ ok: true, cuenta });
+  });
 });

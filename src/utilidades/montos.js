@@ -37,6 +37,12 @@ function SepararMontoCampo(textoCampo) {
   };
 }
 
+// Predicado que nunca lanza: los servicios lo usan para rechazar los montos de
+// la base con formato inesperado antes de dibujarlos (FR-45).
+export function EsMontoApiValido(textoApi) {
+  return typeof textoApi === 'string' && expresionMontoApi.test(textoApi);
+}
+
 export function FormatearMonto(textoApi) {
   const partes = expresionMontoApi.exec(textoApi);
   if (!partes) {

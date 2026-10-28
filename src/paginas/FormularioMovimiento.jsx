@@ -88,8 +88,9 @@ export function FormularioMovimiento({ modo = 'alta', tipo: tipoAlta, idMovimien
   }, [estadoAlVolver, navegar]);
 
   // E4-4: si el movimiento no se puede leer (id mal formado, inexistente, de
-  // otra cuenta o falla de red) o llega con un monto de formato inesperado
-  // (FormatearMonto lanza), "Aceptar" vuelve a Cuenta.
+  // otra cuenta o falla de red) o llega con un tipo, un monto o una fecha de
+  // formato inesperado (ObtenerMovimiento lo rechaza, FR-45), "Aceptar" vuelve
+  // a Cuenta.
   useEffect(() => {
     if (!esEdicion) {
       return undefined;
@@ -99,18 +100,12 @@ export function FormularioMovimiento({ modo = 'alta', tipo: tipoAlta, idMovimien
       if (!vigente) {
         return;
       }
-      let montoCampo = null;
-      try {
-        montoCampo = resultado.ok ? FormatearMonto(resultado.movimiento.monto) : null;
-      } catch {
-        montoCampo = null;
-      }
-      if (montoCampo === null) {
+      if (!resultado.ok) {
         MostrarError(mensajeErrorCargaMovimientos, { alAceptar: VolverACuenta });
         return;
       }
       const { movimiento } = resultado;
-      EstablecerMonto(montoCampo);
+      EstablecerMonto(FormatearMonto(movimiento.monto));
       EstablecerFecha(movimiento.fecha);
       EstablecerIdCategoria(movimiento.id_categoria);
       EstablecerTipo(movimiento.tipo);

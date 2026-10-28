@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ConvertirFechaATexto,
   ConvertirTextoAFecha,
+  EsFechaValida,
   FormatearFecha,
   ObtenerFechaHoyLocal,
 } from './fechas.js';
@@ -77,4 +78,17 @@ describe('ConvertirTextoAFecha y ConvertirFechaATexto', () => {
   it('ConvertirFechaATexto lanza RangeError con una fecha inválida', () => {
     expect(() => ConvertirFechaATexto(new Date(NaN))).toThrow(RangeError);
   });
+});
+
+describe('EsFechaValida', () => {
+  it.each([['2026-10-28'], ['2024-02-29']])('acepta %j', (texto) => {
+    expect(EsFechaValida(texto)).toBe(true);
+  });
+
+  it.each([['2026-02-30'], ['2026-13-01'], ['28/10/2026'], [''], [null], [undefined], [20261028]])(
+    'rechaza %j sin lanzar',
+    (valor) => {
+      expect(EsFechaValida(valor)).toBe(false);
+    },
+  );
 });
