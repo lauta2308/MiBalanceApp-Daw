@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { ConfirmacionEliminarMovimiento } from '../componentes/ConfirmacionEliminarMovimiento.jsx';
 import { EncabezadoCuenta } from '../componentes/EncabezadoCuenta.jsx';
 import { ListaMovimientos } from '../componentes/ListaMovimientos.jsx';
 import { Paginacion } from '../componentes/Paginacion.jsx';
 import { useMensajes } from '../mensajes/ProveedorMensajes.jsx';
-import { mensajeErrorCargaMovimientos, textoCargando } from '../mensajes/textos.js';
+import {
+  mensajeErrorCargaMovimientos,
+  mensajeErrorEliminarMovimiento,
+  mensajeMovimientoEliminado,
+  textoCargando,
+} from '../mensajes/textos.js';
 import { ObtenerCuenta } from '../servicios/cuenta.js';
-import { ObtenerPaginaMovimientos, tamanoPaginaMovimientos } from '../servicios/movimientos.js';
+import {
+  EliminarMovimiento,
+  ObtenerPaginaMovimientos,
+  tamanoPaginaMovimientos,
+} from '../servicios/movimientos.js';
 
 // Sección Cuenta: encabezado con el saldo, lista paginada de movimientos y los
 // accesos a los formularios de alta. No tiene flecha para volver atrás (FR-32).
@@ -16,19 +26,37 @@ import { ObtenerPaginaMovimientos, tamanoPaginaMovimientos } from '../servicios/
 // navegación), el foco queda en el botón que lo abrió, en lugar de perderse en
 // <body> al montarse de nuevo (NFR-07). Al volver de la edición (que indica el
 // movimiento), el foco queda en la fila de ese movimiento si está en la página
-// 1 o, si no, en la primera fila (D5). La primera vez no se fuerza el foco.
+// 1 o, si no, en la primera fila (D5 de FEAT-001b). La primera vez no se fuerza
+// el foco. La eliminación ocurre acá, sin navegar (FEAT-001c D1): "Eliminar"
+// abre la confirmación y, al eliminar, se recarga la página 1 con el foco en
+// su primera fila o, si quedó vacía, en "Añadir Gasto" (FEAT-001c D4).
 export function SeccionCuenta() {
   const navegar = useNavigate();
   const ubicacion = useLocation();
   const botonGasto = useRef(null);
   const botonIngreso = useRef(null);
   const seccion = useRef(null);
-  const { MostrarError } = useMensajes();
+  const { MostrarExito, MostrarError } = useMensajes();
   const [numeroPagina, EstablecerNumeroPagina] = useState(1);
   const [intentoCarga, EstablecerIntentoCarga] = useState(0);
   const [cargando, EstablecerCargando] = useState(true);
   const [cuenta, EstablecerCuenta] = useState(null);
   const [pagina, EstablecerPagina] = useState(null);
+  // Movimiento a eliminar y botón de su fila, mientras la confirmación está abierta.
+  const [confirmacion, EstablecerConfirmacion] = useState(null);
+  const [eliminando, EstablecerEliminando] = useState(false);
+  // Bloquea una segunda eliminación antes de que React vuelva a dibujar (FR-06).
+  const eliminacionEnCurso = useRef(false);
+  // El foco tras eliminar espera a que llegue la página 1 recargada (D4).
+  const focoEliminacionPendiente = useRef(false);
+  const montado = useRef(false);
+
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
 
   // Tipo del formulario de alta o movimiento editado del que se volvió, y el
   // resto del estado de la navegación, leídos una sola vez al montarse.
@@ -70,6 +98,17 @@ export function SeccionCuenta() {
     navegar('.', { replace: true, state: restoEstado });
   }, [pagina, idMovimientoEditadoOrigen, restoEstado, navegar]);
 
+  // Si la recarga posterior a la eliminación falla, la página no cambia y el
+  // foco sigue pendiente hasta la recarga exitosa (E3-4).
+  useEffect(() => {
+    if (!pagina || pagina.numero !== 1 || !focoEliminacionPendiente.current) {
+      return;
+    }
+    focoEliminacionPendiente.current = false;
+    const primeraFila = seccion.current?.querySelector('[data-id-movimiento]');
+    (primeraFila ?? botonGasto.current)?.focus();
+  }, [pagina]);
+
   useEffect(() => {
     let vigente = true;
     Promise.all([ObtenerCuenta(), ObtenerPaginaMovimientos(numeroPagina)]).then(
@@ -107,6 +146,51 @@ export function SeccionCuenta() {
     EstablecerNumeroPagina(numeroPaginaNuevo);
   }
 
+  function ManejarEliminar(idMovimiento, elementoBotonFila) {
+    EstablecerConfirmacion({ idMovimiento, elementoBotonFila });
+  }
+
+  // D3: el foco vuelve a la fila desde la que se eligió "Eliminar".
+  function ManejarCancelarEliminacion() {
+    const elementoBotonFila = confirmacion?.elementoBotonFila;
+    EstablecerConfirmacion(null);
+    if (elementoBotonFila?.isConnected) {
+      elementoBotonFila.focus();
+    }
+  }
+
+  async function ManejarConfirmarEliminacion() {
+    if (eliminacionEnCurso.current || !confirmacion) {
+      return;
+    }
+    const { idMovimiento, elementoBotonFila } = confirmacion;
+    eliminacionEnCurso.current = true;
+    EstablecerEliminando(true);
+
+    const resultado = await EliminarMovimiento(idMovimiento);
+    // El éxito y el error se muestran siempre, aunque el usuario ya haya salido
+    // de Cuenta (FR-07, FR-10, E3-5); el estado se toca solo si sigue montada.
+    // Ante el error, la confirmación se cierra antes de mostrarlo y, al
+    // aceptarlo, el foco vuelve a la fila si sigue en el DOM (D3, E3-1).
+    if (montado.current) {
+      eliminacionEnCurso.current = false;
+      EstablecerEliminando(false);
+      EstablecerConfirmacion(null);
+    }
+    if (!resultado.ok) {
+      MostrarError(mensajeErrorEliminarMovimiento, { elementoFoco: elementoBotonFila });
+      return;
+    }
+    MostrarExito(mensajeMovimientoEliminado);
+    if (montado.current) {
+      // D4: se recarga la página 1 aunque ya se estuviera en ella.
+      focoEliminacionPendiente.current = true;
+      EstablecerCargando(true);
+      EstablecerNumeroPagina(1);
+      EstablecerIntentoCarga((intento) => intento + 1);
+    }
+  }
+
   return (
     <section className="seccion-cuenta" ref={seccion}>
       {cuenta && <EncabezadoCuenta cuenta={cuenta} />}
@@ -139,6 +223,7 @@ export function SeccionCuenta() {
             movimientos={pagina.movimientos}
             total={pagina.total}
             alEditar={(idMovimiento) => navegar(`/movimientos/${idMovimiento}/editar`)}
+            alEliminar={ManejarEliminar}
           />
           <Paginacion
             numeroPagina={pagina.numero}
@@ -150,6 +235,13 @@ export function SeccionCuenta() {
             alSiguiente={() => ManejarCambioPagina(pagina.numero + 1)}
           />
         </>
+      )}
+      {confirmacion && (
+        <ConfirmacionEliminarMovimiento
+          eliminando={eliminando}
+          alConfirmar={ManejarConfirmarEliminacion}
+          alCancelar={ManejarCancelarEliminacion}
+        />
       )}
     </section>
   );

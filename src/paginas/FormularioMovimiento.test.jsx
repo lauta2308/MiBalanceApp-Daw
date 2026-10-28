@@ -1526,14 +1526,15 @@ describe('FormularioMovimiento', () => {
       await usuario.tab();
       expect(document.activeElement).toBe(ObtenerFila(idGasto));
 
-      // Espacio abre el menú y Escape lo cierra; Enter lo abre y elige "Editar".
+      // Espacio abre el menú y Escape lo cierra; Enter lo abre (el foco ya
+      // está en "Editar", la primera opción) y Enter lo elige.
       await usuario.keyboard(' ');
       expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Editar' }));
       await usuario.keyboard('{Escape}');
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
       expect(document.activeElement).toBe(ObtenerFila(idGasto));
       await usuario.keyboard('{Enter}');
-      await usuario.keyboard('{ArrowDown}');
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Editar' }));
       await usuario.keyboard('{Enter}');
       await EsperarEdicionCargada();
 

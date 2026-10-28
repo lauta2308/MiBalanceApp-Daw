@@ -22,16 +22,17 @@ function RecibeFocoAlPresionar(elemento) {
   return Boolean(control && !control.disabled);
 }
 
-// Menú de la fila de un movimiento (FR-01): por ahora una sola opción,
-// "Editar" (FEAT-001c le agrega "Eliminar"). Se dibuja debajo del botón de la
-// fila que lo abrió. Al abrirse, el foco pasa a la primera opción; las flechas,
-// Inicio y Fin lo mueven entre las opciones; Escape o Mayús+Tab lo cierran y
-// devuelven el foco al botón de la fila; Tab lo cierra y deja que el foco siga
-// su camino (NFR-04). Un clic afuera lo cierra: si cae en una zona que no
-// puede recibir el foco, el foco vuelve a la fila; si cae en un control
-// enfocable, queda en ese control (patrón APG). `id` e `idBotonFila` enlazan
-// el menú con su fila (patrón APG de botón de menú).
-export function MenuMovimiento({ id, idBotonFila, botonFila, alEditar, alCerrar }) {
+// Menú de la fila de un movimiento (FEAT-001b FR-01; FEAT-001c FR-01): las
+// opciones "Editar" y "Eliminar". Se dibuja debajo del botón de la fila que lo
+// abrió. Al abrirse, el foco pasa a la primera opción; las flechas, Inicio y
+// Fin lo mueven entre las opciones, que quedan fuera del orden de Tab; Escape
+// o Mayús+Tab lo cierran y devuelven el foco al botón de la fila; Tab lo
+// cierra y deja que el foco siga su camino (NFR-04). Un clic afuera lo
+// cierra: si cae en una zona que no puede recibir el foco, el foco vuelve a la
+// fila; si cae en un control enfocable, queda en ese control (patrón APG).
+// `id` e `idBotonFila` enlazan el menú con su fila (patrón APG de botón de
+// menú).
+export function MenuMovimiento({ id, idBotonFila, botonFila, alEditar, alEliminar, alCerrar }) {
   const menu = useRef(null);
 
   useEffect(() => {
@@ -107,8 +108,25 @@ export function MenuMovimiento({ id, idBotonFila, botonFila, alEditar, alCerrar 
       onKeyDown={ManejarTecla}
     >
       <li role="none">
-        <button type="button" className="opcion-menu" role="menuitem" onClick={alEditar}>
+        <button
+          type="button"
+          className="opcion-menu"
+          role="menuitem"
+          tabIndex={-1}
+          onClick={alEditar}
+        >
           Editar
+        </button>
+      </li>
+      <li role="none">
+        <button
+          type="button"
+          className="opcion-menu"
+          role="menuitem"
+          tabIndex={-1}
+          onClick={alEliminar}
+        >
+          Eliminar
         </button>
       </li>
     </ul>

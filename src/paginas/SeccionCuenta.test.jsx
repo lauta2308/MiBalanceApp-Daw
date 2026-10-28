@@ -1,14 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from 'react-router';
 
 // Cliente de Supabase simulado: cada consulta registra lo que se le pidió
-// (tabla, select, order, range) y responde con lo que indique la prueba.
+// (tabla, select, order, range) y responde con lo que indique la prueba. Cada
+// llamada RPC se registra (nombre y parámetros) y responde con responderRpc.
 const simulacion = vi.hoisted(() => ({
   consultas: [],
+  llamadasRpc: [],
   responderCuenta: null,
   responderMovimientos: null,
+  responderRpc: null,
 }));
 
 vi.mock('../servicios/clienteSupabase.js', () => {
@@ -38,7 +41,11 @@ vi.mock('../servicios/clienteSupabase.js', () => {
     };
     return consulta;
   }
-  return { clienteSupabase: { from: (tabla) => CrearConsulta(tabla) } };
+  function LlamarRpc(nombre, parametros) {
+    simulacion.llamadasRpc.push({ nombre, parametros });
+    return Promise.resolve().then(() => simulacion.responderRpc(nombre, parametros));
+  }
+  return { clienteSupabase: { from: (tabla) => CrearConsulta(tabla), rpc: LlamarRpc } };
 });
 
 import { ProveedorMensajes } from '../mensajes/ProveedorMensajes.jsx';
@@ -72,11 +79,30 @@ function CrearMovimientos(cantidad, ObtenerFecha = () => '2026-10-02') {
   });
 }
 
+// El servidor simulado guarda su propia copia de la cuenta y los movimientos:
+// basp_eliminar_movimiento borra el movimiento y le quita su efecto al saldo,
+// como la función de la base (los montos de las pruebas son exactos en centavos).
 function ConfigurarServidor({ cuenta = CrearCuenta('0.00'), movimientos = [] } = {}) {
-  simulacion.responderCuenta = () => ({ data: cuenta ? [cuenta] : [], error: null });
+  const servidor = { cuenta: cuenta && { ...cuenta }, movimientos: [...movimientos] };
+  simulacion.responderCuenta = () => ({ data: servidor.cuenta ? [servidor.cuenta] : [], error: null });
   simulacion.responderMovimientos = (registro) => {
-    const [desde, hasta] = registro.range ?? [0, movimientos.length - 1];
-    return { data: movimientos.slice(desde, hasta + 1), error: null, count: movimientos.length };
+    const [desde, hasta] = registro.range ?? [0, servidor.movimientos.length - 1];
+    return {
+      data: servidor.movimientos.slice(desde, hasta + 1),
+      error: null,
+      count: servidor.movimientos.length,
+    };
+  };
+  simulacion.responderRpc = (nombre, { p_id_movimiento: idMovimiento }) => {
+    const movimiento = servidor.movimientos.find((candidato) => candidato.id === idMovimiento);
+    if (nombre !== 'basp_eliminar_movimiento' || !movimiento) {
+      return { data: null, error: { message: 'movimiento inexistente', code: 'BA404' } };
+    }
+    servidor.movimientos = servidor.movimientos.filter((candidato) => candidato !== movimiento);
+    const efectoCentavos = Math.round(Number(movimiento.monto) * 100) * (movimiento.tipo === 'INGRESO' ? 1 : -1);
+    const saldoCentavos = Math.round(Number(servidor.cuenta.saldo) * 100) - efectoCentavos;
+    servidor.cuenta = { ...servidor.cuenta, saldo: (saldoCentavos / 100).toFixed(2) };
+    return { data: idMovimiento, error: null };
   };
 }
 
@@ -91,6 +117,32 @@ function RenderizarSeccion() {
           <Route path="/movimientos/:idMovimiento/editar" element={<PantallaEditar />} />
         </Routes>
       </ProveedorMensajes>
+    </MemoryRouter>,
+  );
+}
+
+// Cuenta montada sobre una entrada anterior del historial ("/anterior"), con
+// un botón "Atrás" del arnés fuera de la sección y del modal, como el Atrás del
+// navegador: sale de Cuenta aunque la confirmación esté abierta.
+function BotonAtrasNavegador() {
+  const navegar = useNavigate();
+  return (
+    <button type="button" onClick={() => navegar(-1)}>
+      Atrás del Navegador
+    </button>
+  );
+}
+
+function RenderizarSeccionConHistorial() {
+  render(
+    <MemoryRouter initialEntries={['/anterior', '/']} initialIndex={1}>
+      <ProveedorMensajes>
+        <Routes>
+          <Route path="/" element={<SeccionCuenta />} />
+          <Route path="/anterior" element={<h1>Pantalla Anterior</h1>} />
+        </Routes>
+      </ProveedorMensajes>
+      <BotonAtrasNavegador />
     </MemoryRouter>,
   );
 }
@@ -166,6 +218,7 @@ function ObtenerSaldo() {
 describe('SeccionCuenta', () => {
   beforeEach(() => {
     simulacion.consultas.length = 0;
+    simulacion.llamadasRpc.length = 0;
     ConfigurarServidor();
   });
 
@@ -624,5 +677,371 @@ describe('SeccionCuenta', () => {
       expect(consulta.range[1] - consulta.range[0] + 1).toBe(50);
     }
     expect(ObtenerSaldo()).toHaveTextContent('USD 0,00');
+  });
+
+  describe('eliminación desde el menú de la fila', () => {
+    const mensajeEliminado = 'Movimiento eliminado con éxito.';
+    const mensajeErrorEliminar = 'No se pudo eliminar el movimiento. Vuelva a intentarlo.';
+    const textoPregunta = '¿Está seguro que desea eliminar este movimiento?';
+
+    // EliminarMovimiento solo acepta ids con forma de UUID.
+    function CrearIdMovimiento(numero) {
+      return `00000000-0000-4000-8000-${String(numero).padStart(12, '0')}`;
+    }
+
+    const idIngreso = CrearIdMovimiento(2);
+    const idGasto = CrearIdMovimiento(1);
+    const idCafe = CrearIdMovimiento(3);
+    const idVenta = CrearIdMovimiento(4);
+
+    // Saldo 5.000 = ingreso de 1.000 + ingreso de 4.800 − gasto de 800.
+    function ConfigurarCuentaAc03() {
+      ConfigurarServidor({
+        cuenta: CrearCuenta('5000.00'),
+        movimientos: [
+          CrearMovimiento(idCafe, '2026-10-02', 'GASTO', '800.00', 'Café'),
+          CrearMovimiento(idIngreso, '2026-10-01', 'INGRESO', '1000.00', 'Sueldo'),
+          CrearMovimiento(idVenta, '2026-09-17', 'INGRESO', '4800.00', 'Venta'),
+        ],
+      });
+    }
+
+    // 120 movimientos con ids UUID; "Categoría 001" es el más reciente.
+    function CrearMovimientosEliminables(cantidad) {
+      return Array.from({ length: cantidad }, (_, indice) => {
+        const posicion = String(indice + 1).padStart(3, '0');
+        return CrearMovimiento(CrearIdMovimiento(indice + 1), '2026-10-02', 'GASTO', '10.00', `Categoría ${posicion}`);
+      });
+    }
+
+    function AbrirConfirmacion(idMovimiento) {
+      fireEvent.click(ObtenerFila(idMovimiento));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Eliminar' }));
+      return screen.getByRole('alertdialog', { name: textoPregunta });
+    }
+
+    function LlamadasEliminar() {
+      return simulacion.llamadasRpc.filter((llamada) => llamada.nombre === 'basp_eliminar_movimiento');
+    }
+
+    // Retiene la respuesta del RPC hasta que la prueba la libere.
+    function RetenerRpc() {
+      const responderInmediato = simulacion.responderRpc;
+      const retencion = { liberar: null };
+      simulacion.responderRpc = (...argumentos) =>
+        new Promise((resolver) => {
+          retencion.liberar = () => resolver(responderInmediato(...argumentos));
+        });
+      return retencion;
+    }
+
+    it('elegir "Eliminar" muestra la pregunta con "Confirmar" y "Cancelar", con el foco en "Cancelar" (AC-02)', async () => {
+      ConfigurarCuentaAc03();
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+
+      const dialogo = AbrirConfirmacion(idIngreso);
+
+      expect(dialogo).toHaveAttribute('aria-modal', 'true');
+      expect(within(dialogo).getByText(textoPregunta)).toBeInTheDocument();
+      expect(within(dialogo).getByRole('button', { name: 'Confirmar' })).toBeInTheDocument();
+      expect(document.activeElement).toBe(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(LlamadasEliminar()).toHaveLength(0);
+    });
+
+    it.each([
+      ['un clic en "Cancelar"', () => fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))],
+      ['Escape', () => fireEvent.keyDown(document.activeElement, { key: 'Escape' })],
+    ])('%s cierra la confirmación sin llamar al RPC; la fila y el saldo siguen y el foco vuelve a la fila (AC-04)', async (_, Cancelar) => {
+      ConfigurarCuentaAc03();
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+      AbrirConfirmacion(idIngreso);
+
+      Cancelar();
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(LlamadasEliminar()).toHaveLength(0);
+      expect(ObtenerFila(idIngreso)).toHaveTextContent('Sueldo+1.000,00');
+      expect(ObtenerSaldo()).toHaveTextContent('USD 5.000,00');
+      expect(document.activeElement).toBe(ObtenerFila(idIngreso));
+    });
+
+    it('dos clics seguidos en "Confirmar" llaman al RPC una sola vez; mientras tanto "Eliminando…" tiene el foco, "Cancelar" está deshabilitado y Escape no cierra (AC-05, E3-2, E3-3)', async () => {
+      ConfigurarCuentaAc03();
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+      const retencion = RetenerRpc();
+      const dialogo = AbrirConfirmacion(idIngreso);
+      const confirmar = within(dialogo).getByRole('button', { name: 'Confirmar' });
+
+      confirmar.focus();
+      fireEvent.click(confirmar);
+      fireEvent.click(confirmar);
+      await vi.waitFor(() => expect(retencion.liberar).toBeTypeOf('function'));
+
+      expect(LlamadasEliminar()).toHaveLength(1);
+      expect(LlamadasEliminar()[0].parametros).toEqual({ p_id_movimiento: idIngreso });
+      const eliminando = within(dialogo).getByRole('button', { name: 'Eliminando…' });
+      expect(eliminando).toBe(confirmar);
+      expect(eliminando).toHaveAttribute('aria-disabled', 'true');
+      expect(eliminando).not.toHaveAttribute('disabled');
+      expect(document.activeElement).toBe(eliminando);
+      expect(within(dialogo).getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+      fireEvent.keyDown(eliminando, { key: 'Escape' });
+      fireEvent.click(eliminando);
+      expect(screen.getByRole('alertdialog', { name: textoPregunta })).toBe(dialogo);
+      expect(LlamadasEliminar()).toHaveLength(1);
+
+      retencion.liberar();
+
+      await vi.waitFor(() => expect(ObtenerSaldo()).toHaveTextContent('USD 4.000,00'));
+      expect(LlamadasEliminar()).toHaveLength(1);
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    });
+
+    it('doble Enter en "Confirmar" llama al RPC una sola vez (AC-05, E3-2)', async () => {
+      ConfigurarCuentaAc03();
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+      const retencion = RetenerRpc();
+      AbrirConfirmacion(idIngreso);
+      const usuario = userEvent.setup();
+
+      await usuario.tab();
+      expect(document.activeElement).toHaveTextContent('Confirmar');
+      await usuario.keyboard('{Enter}');
+      await usuario.keyboard('{Enter}');
+      await vi.waitFor(() => expect(retencion.liberar).toBeTypeOf('function'));
+
+      expect(LlamadasEliminar()).toHaveLength(1);
+      retencion.liberar();
+      await vi.waitFor(() => expect(ObtenerSaldo()).toHaveTextContent('USD 4.000,00'));
+      expect(LlamadasEliminar()).toHaveLength(1);
+    });
+
+    it('estando en la página 1, eliminar vuelve a pedir la página 1 y la cuenta, y el foco queda en la primera fila', async () => {
+      ConfigurarCuentaAc03();
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+      const consultasAntes = simulacion.consultas.length;
+
+      AbrirConfirmacion(idIngreso);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+      await vi.waitFor(() => expect(ObtenerFila(idIngreso)).toBeUndefined());
+      const consultasRecarga = simulacion.consultas.slice(consultasAntes);
+      expect(consultasRecarga.map((consulta) => consulta.tabla).sort()).toEqual([
+        'bav_cuenta',
+        'bav_movimientos',
+      ]);
+      expect(consultasRecarga.find((consulta) => consulta.tabla === 'bav_movimientos').range).toEqual([0, 49]);
+      expect(ObtenerFilas().map((fila) => fila.textContent)).toEqual(['Café-800,00', 'Venta+4.800,00']);
+      await vi.waitFor(() => expect(document.activeElement).toBe(ObtenerFilas()[0]));
+    });
+
+    it('con 120 movimientos en la página 2, eliminar uno vuelve a la página 1 con "Página 1 de 3" y el foco en su primera fila (AC-06)', async () => {
+      ConfigurarServidor({ movimientos: CrearMovimientosEliminables(120) });
+      RenderizarSeccion();
+      await screen.findByText('Página 1 de 3');
+      fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+      await screen.findByText('Página 2 de 3');
+
+      const idPagina2 = CrearIdMovimiento(60);
+      AbrirConfirmacion(idPagina2);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+      expect(await screen.findByText('Página 1 de 3')).toBeInTheDocument();
+      expect(ObtenerFilas()[0]).toHaveTextContent('Categoría 001');
+      expect(ConsultasDeMovimientos().at(-1).range).toEqual([0, 49]);
+      expect(LlamadasEliminar()).toEqual([
+        { nombre: 'basp_eliminar_movimiento', parametros: { p_id_movimiento: idPagina2 } },
+      ]);
+      await vi.waitFor(() => expect(document.activeElement).toBe(ObtenerFilas()[0]));
+    });
+
+    it('eliminar el único movimiento muestra "Aquí verá sus movimientos." y "USD 0,00", con el foco en "Añadir Gasto" (AC-07)', async () => {
+      ConfigurarServidor({
+        cuenta: CrearCuenta('-500.00'),
+        movimientos: [CrearMovimiento(idGasto, '2026-10-01', 'GASTO', '500.00', 'Mercado')],
+      });
+      RenderizarSeccion();
+      await screen.findByText('Mercado');
+
+      AbrirConfirmacion(idGasto);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+      expect(await screen.findByText(mensajeSinMovimientos)).toBeInTheDocument();
+      expect(ObtenerSaldo()).toHaveTextContent('USD 0,00');
+      await vi.waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Añadir Gasto' })),
+      );
+    });
+
+    it('(error E3-1) con el RPC rechazado se cierra la confirmación, se muestra el error con "Aceptar", la fila y el saldo siguen y al aceptar el foco vuelve a la fila (AC-08, AC-11)', async () => {
+      ConfigurarCuentaAc03();
+      simulacion.responderRpc = () => ({ data: null, error: { message: 'falla simulada', code: 'BA500' } });
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+      const consultasAntes = simulacion.consultas.length;
+
+      AbrirConfirmacion(idIngreso);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+      const error = await screen.findByRole('alertdialog', { name: mensajeErrorEliminar });
+      expect(screen.queryByRole('alertdialog', { name: textoPregunta })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+      expect(screen.queryByText(/BA500|falla simulada/)).not.toBeInTheDocument();
+      expect(LlamadasEliminar()).toHaveLength(1);
+      expect(ObtenerFila(idIngreso)).toHaveTextContent('Sueldo+1.000,00');
+      expect(ObtenerSaldo()).toHaveTextContent('USD 5.000,00');
+      expect(simulacion.consultas.length).toBe(consultasAntes);
+
+      fireEvent.click(within(error).getByRole('button', { name: 'Aceptar' }));
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(ObtenerFila(idIngreso));
+    });
+
+    it('(error E3-1) después de un rechazo se puede volver a eliminar el mismo movimiento', async () => {
+      ConfigurarCuentaAc03();
+      const responderBien = simulacion.responderRpc;
+      simulacion.responderRpc = () => ({ data: null, error: { code: 'BA500' } });
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+      AbrirConfirmacion(idIngreso);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Aceptar' }));
+
+      simulacion.responderRpc = responderBien;
+      AbrirConfirmacion(idIngreso);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+      await vi.waitFor(() => expect(ObtenerSaldo()).toHaveTextContent('USD 4.000,00'));
+      expect(LlamadasEliminar()).toHaveLength(2);
+    });
+
+    it('(error E3-4) si la recarga posterior al éxito falla, se muestra el error de carga y, tras "Aceptar", la recarga exitosa enfoca la primera fila', async () => {
+      ConfigurarCuentaAc03();
+      RenderizarSeccion();
+      await screen.findByText('Sueldo');
+      const responderMovimientos = simulacion.responderMovimientos;
+      simulacion.responderMovimientos = () => ({ data: null, error: errorSupabase, count: null });
+
+      AbrirConfirmacion(idIngreso);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+      const error = await screen.findByRole('alertdialog', { name: mensajeErrorCarga });
+      expect(LlamadasEliminar()).toHaveLength(1);
+      simulacion.responderMovimientos = responderMovimientos;
+      fireEvent.click(within(error).getByRole('button', { name: 'Aceptar' }));
+
+      await vi.waitFor(() => expect(ObtenerFila(idIngreso)).toBeUndefined());
+      expect(ObtenerSaldo()).toHaveTextContent('USD 4.000,00');
+      await vi.waitFor(() => expect(document.activeElement).toBe(ObtenerFilas()[0]));
+      expect(ObtenerFilas()[0]).toHaveTextContent('Café');
+    });
+
+    it('(error E3-5) si Cuenta se desmonta durante la eliminación, no hay advertencias, no recarga y el mensaje de éxito se muestra', async () => {
+      const espiaErrores = vi.spyOn(console, 'error');
+      try {
+        ConfigurarCuentaAc03();
+        RenderizarSeccionConHistorial();
+        await screen.findByText('Sueldo');
+        const retencion = RetenerRpc();
+        AbrirConfirmacion(idIngreso);
+        fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+        await vi.waitFor(() => expect(retencion.liberar).toBeTypeOf('function'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Atrás del Navegador' }));
+        await screen.findByRole('heading', { name: 'Pantalla Anterior' });
+        const consultasAntes = simulacion.consultas.length;
+        retencion.liberar();
+
+        expect(await screen.findByText(mensajeEliminado)).toBeInTheDocument();
+        expect(simulacion.consultas.length).toBe(consultasAntes);
+        expect(espiaErrores).not.toHaveBeenCalled();
+      } finally {
+        espiaErrores.mockRestore();
+      }
+    });
+
+    it('(error E3-5, FR-10) si Cuenta se desmonta y el RPC falla, se muestra "No se pudo eliminar el movimiento. Vuelva a intentarlo."', async () => {
+      const espiaErrores = vi.spyOn(console, 'error');
+      try {
+        ConfigurarCuentaAc03();
+        simulacion.responderRpc = () => ({ data: null, error: { code: 'BA500' } });
+        RenderizarSeccionConHistorial();
+        await screen.findByText('Sueldo');
+        const retencion = RetenerRpc();
+        AbrirConfirmacion(idIngreso);
+        fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+        await vi.waitFor(() => expect(retencion.liberar).toBeTypeOf('function'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Atrás del Navegador' }));
+        await screen.findByRole('heading', { name: 'Pantalla Anterior' });
+        retencion.liberar();
+
+        const error = await screen.findByRole('alertdialog', { name: mensajeErrorEliminar });
+        expect(screen.queryByText(mensajeEliminado)).not.toBeInTheDocument();
+        // La fila ya no está en el DOM: "Aceptar" cierra el error sin fallar.
+        fireEvent.click(within(error).getByRole('button', { name: 'Aceptar' }));
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+        expect(espiaErrores).not.toHaveBeenCalled();
+      } finally {
+        espiaErrores.mockRestore();
+      }
+    });
+
+    describe('con temporizadores falsos', () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      async function AvanzarTiempo(milisegundos) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(milisegundos);
+        });
+      }
+
+      // Deja correr las promesas pendientes (servidor simulado) sin mover el reloj.
+      async function EsperarHasta(condicion) {
+        for (let intento = 0; intento < 50; intento += 1) {
+          if (condicion()) {
+            return;
+          }
+          await AvanzarTiempo(0);
+        }
+        expect(condicion()).toBe(true);
+      }
+
+      it('con saldo 5.000, "Eliminar" → "Confirmar" sobre el ingreso de 1.000 llama al RPC una vez, quita la fila, muestra "USD 4.000,00" y el mensaje con el tic, que se cierra a los 3 s (AC-03)', async () => {
+        ConfigurarCuentaAc03();
+        RenderizarSeccion();
+        await EsperarHasta(() => screen.queryByText('Sueldo') !== null);
+
+        AbrirConfirmacion(idIngreso);
+        fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+        await EsperarHasta(() => ObtenerFila(idIngreso) === undefined);
+        expect(LlamadasEliminar()).toEqual([
+          { nombre: 'basp_eliminar_movimiento', parametros: { p_id_movimiento: idIngreso } },
+        ]);
+        expect(ObtenerSaldo()).toHaveTextContent('USD 4.000,00');
+        expect(screen.queryByText('+1.000,00')).not.toBeInTheDocument();
+        expect(screen.getByText(mensajeEliminado)).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Éxito' })).toBeInTheDocument();
+
+        await AvanzarTiempo(2900);
+        expect(screen.getByText(mensajeEliminado)).toBeInTheDocument();
+        await AvanzarTiempo(200);
+        expect(screen.queryByText(mensajeEliminado)).not.toBeInTheDocument();
+      });
+    });
   });
 });

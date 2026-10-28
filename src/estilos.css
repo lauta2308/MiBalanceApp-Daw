@@ -67,13 +67,21 @@ body {
   border-color: var(--color-verde);
 }
 
-.mensaje-error {
+/* La confirmación de la eliminación (FEAT-001c FR-02) comparte el ancho y el
+   fondo del mensaje de error; nunca coinciden en pantalla, porque la
+   confirmación se cierra antes de mostrar el error. */
+.mensaje-error,
+.confirmacion-eliminar {
   width: 100%;
   max-width: 28rem;
+}
+
+.mensaje-error {
   border-color: var(--color-rojo);
 }
 
-.fondo-mensaje-error {
+.fondo-mensaje-error,
+.fondo-confirmacion {
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -87,6 +95,30 @@ body {
 .texto-mensaje {
   flex: 1 1 12rem;
   margin: 0;
+}
+
+/* Botones de la confirmación: en fila; por debajo de 360 px, en columna
+   (NFR-05). Sin colores nuevos. */
+.botones-confirmacion {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+/* Mientras se elimina, Chrome no entrega mousedown a "Cancelar" deshabilitado
+   y el clic dejaría el foco en <body>: sin puntero, el clic cae en la caja, la
+   caja anula el mousedown y el foco queda en "Eliminando…" (NFR-04). Se pierde
+   el cursor not-allowed de "Cancelar" mientras se elimina (decisión aceptada). */
+.botones-confirmacion button:disabled {
+  pointer-events: none;
+}
+
+@media (width < 360px) {
+  .botones-confirmacion {
+    flex-direction: column;
+  }
 }
 
 .icono-mensaje {

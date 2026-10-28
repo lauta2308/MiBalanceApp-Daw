@@ -130,7 +130,7 @@ describe('ListaMovimientos', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });
 
-    it('presionar la fila con un clic abre un menú con "Editar" debajo de la fila y le pasa el foco (AC-01)', async () => {
+    it('presionar la fila con un clic abre un menú con "Editar" y "Eliminar" debajo de la fila y le pasa el foco a "Editar" (AC-01)', async () => {
       const usuario = userEvent.setup();
       render(<ListaMovimientos movimientos={movimientosAc36} total={3} alEditar={vi.fn()} />);
 
@@ -140,6 +140,7 @@ describe('ListaMovimientos', () => {
       const menu = screen.getByRole('menu');
       expect(within(menu).getAllByRole('menuitem').map((opcion) => opcion.textContent)).toEqual([
         'Editar',
+        'Eliminar',
       ]);
       expect(fila).toHaveAttribute('aria-expanded', 'true');
       expect(fila.closest('li')).toContainElement(menu);
@@ -241,6 +242,30 @@ describe('ListaMovimientos', () => {
       expect(alEditar).toHaveBeenCalledTimes(1);
       expect(alEditar).toHaveBeenCalledWith('m2');
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('elegir "Eliminar" llama a alEliminar con el id del movimiento y el botón de su fila, y cierra el menú', async () => {
+      const usuario = userEvent.setup();
+      const alEditar = vi.fn();
+      const alEliminar = vi.fn();
+      render(
+        <ListaMovimientos
+          movimientos={movimientosAc36}
+          total={3}
+          alEditar={alEditar}
+          alEliminar={alEliminar}
+        />,
+      );
+      const fila = ObtenerFila('Sueldo');
+      await usuario.click(fila);
+
+      await usuario.click(screen.getByRole('menuitem', { name: 'Eliminar' }));
+
+      expect(alEliminar).toHaveBeenCalledTimes(1);
+      expect(alEliminar).toHaveBeenCalledWith('m2', fila);
+      expect(alEditar).not.toHaveBeenCalled();
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(fila).toHaveAttribute('aria-expanded', 'false');
     });
   });
 });

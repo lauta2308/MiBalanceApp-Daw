@@ -11,8 +11,8 @@
 | Sub-ticket | Título | PRD | Dependencias | Status |
 |---|---|---|---|---|
 | FEAT-001a | Cuenta, Saldo, Alta y Lista de Movimientos | prd-FEAT-001a.md | ninguna | done — en el PR #1, se integra a main con su merge |
-| FEAT-001b | Edición de Movimientos | prd-FEAT-001b.md | depende de a | active |
-| FEAT-001c | Eliminación de Movimientos | prd-FEAT-001c.md | depende de a y b | pending |
+| FEAT-001b | Edición de Movimientos | prd-FEAT-001b.md | depende de a | done — PR #2 mergeado en main (02bdeae) |
+| FEAT-001c | Eliminación de Movimientos | prd-FEAT-001c.md | depende de a y b | active |
 
 ## Orden de implementación sugerido
 

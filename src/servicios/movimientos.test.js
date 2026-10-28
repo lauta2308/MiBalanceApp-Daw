@@ -63,6 +63,7 @@ vi.mock('./clienteSupabase.js', () => {
 import {
   AgregarMovimiento,
   EditarMovimiento,
+  EliminarMovimiento,
   ObtenerMovimiento,
   ObtenerPaginaMovimientos,
 } from './movimientos.js';
@@ -98,6 +99,7 @@ describe('servicio de movimientos', () => {
     simulacion.respuestasRpc = {
       basp_agregar_movimiento: () => ({ data: 'id-movimiento-nuevo', error: null }),
       basp_editar_movimiento: (parametros) => ({ data: parametros.p_id_movimiento, error: null }),
+      basp_eliminar_movimiento: (parametros) => ({ data: parametros.p_id_movimiento, error: null }),
     };
   });
 
@@ -311,6 +313,54 @@ describe('servicio de movimientos', () => {
       expect(simulacion.llamadasRpc).toHaveLength(1);
       expect(simulacion.llamadasRpc[0].nombre).toBe('basp_editar_movimiento');
       expect(resultado).toEqual({ ok: false });
+    });
+  });
+
+  describe('EliminarMovimiento', () => {
+    const idMovimiento = '3f2b8c1e-5a4d-4e7f-9b6a-1c2d3e4f5a6b';
+
+    it('con un id válido llama una sola vez a basp_eliminar_movimiento con { p_id_movimiento } y devuelve { ok: true } (FR-03)', async () => {
+      const resultado = await EliminarMovimiento(idMovimiento);
+
+      expect(resultado).toEqual({ ok: true });
+      expect(simulacion.llamadasRpc).toEqual([
+        {
+          nombre: 'basp_eliminar_movimiento',
+          parametros: { p_id_movimiento: idMovimiento },
+        },
+      ]);
+    });
+
+    it.each([['abc'], [''], [undefined], [`${idMovimiento}x`], ['3f2b8c1e5a4d4e7f9b6a1c2d3e4f5a6b']])(
+      '(error E2-1) con el id mal formado %j devuelve { ok: false } sin llamar a Supabase',
+      async (idMalFormado) => {
+        await expect(EliminarMovimiento(idMalFormado)).resolves.toEqual({ ok: false });
+        expect(simulacion.llamadasRpc).toHaveLength(0);
+      },
+    );
+
+    it.each([
+      ['un rechazo BA500 (falla simulada)', () => ({ data: null, error: { code: 'BA500', message: 'Falla simulada' } })],
+      [
+        'un rechazo BA404 (inexistente o ajeno)',
+        () => ({ data: null, error: { code: 'BA404', message: 'Movimiento no encontrado' } }),
+      ],
+      ['una respuesta sin data', () => ({ data: null, error: null })],
+      [
+        'una excepción de red',
+        () => {
+          throw new Error('Failed to fetch');
+        },
+      ],
+    ])('(error E2-2, E2-3) ante %s devuelve exactamente { ok: false }, sin el texto del error (FR-10)', async (_, responder) => {
+      simulacion.respuestasRpc.basp_eliminar_movimiento = responder;
+
+      const resultado = await EliminarMovimiento(idMovimiento);
+
+      expect(simulacion.llamadasRpc).toHaveLength(1);
+      expect(simulacion.llamadasRpc[0].nombre).toBe('basp_eliminar_movimiento');
+      expect(resultado).toEqual({ ok: false });
+      expect(JSON.stringify(resultado)).not.toMatch(/Falla simulada|no encontrado|Failed to fetch|BA500|BA404/);
     });
   });
 });

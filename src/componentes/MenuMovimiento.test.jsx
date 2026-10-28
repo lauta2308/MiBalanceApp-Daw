@@ -8,7 +8,7 @@ import { MenuMovimiento } from './MenuMovimiento.jsx';
 // usa ListaMovimientos. "Otro Botón" representa cualquier control de afuera;
 // el título, el botón deshabilitado, la etiqueta sin control y el enlace sin
 // destino son zonas de afuera que no pueden recibir el foco.
-function RenderizarMenu({ alEditar = vi.fn(), alCerrar = vi.fn() } = {}) {
+function RenderizarMenu({ alEditar = vi.fn(), alEliminar = vi.fn(), alCerrar = vi.fn() } = {}) {
   function Prueba() {
     const botonFila = useRef(null);
     return (
@@ -22,30 +22,47 @@ function RenderizarMenu({ alEditar = vi.fn(), alCerrar = vi.fn() } = {}) {
         <button type="button" ref={botonFila}>
           Fila Mercado
         </button>
-        <MenuMovimiento botonFila={botonFila} alEditar={alEditar} alCerrar={alCerrar} />
+        <MenuMovimiento
+          botonFila={botonFila}
+          alEditar={alEditar}
+          alEliminar={alEliminar}
+          alCerrar={alCerrar}
+        />
         <button type="button">Otro Botón</button>
       </>
     );
   }
   render(<Prueba />);
-  return { alEditar, alCerrar, botonFila: screen.getByRole('button', { name: 'Fila Mercado' }) };
+  return {
+    alEditar,
+    alEliminar,
+    alCerrar,
+    botonFila: screen.getByRole('button', { name: 'Fila Mercado' }),
+  };
 }
 
 describe('MenuMovimiento', () => {
-  it('es un menú con una sola opción "Editar" y, al abrirse, el foco va a "Editar"', () => {
+  it('es un menú con las opciones "Editar" y "Eliminar" y, al abrirse, el foco va a "Editar" (AC-01)', () => {
     RenderizarMenu();
 
     const menu = screen.getByRole('menu');
     const opciones = screen.getAllByRole('menuitem');
-    expect(opciones.map((opcion) => opcion.textContent)).toEqual(['Editar']);
-    expect(menu).toContainElement(opciones[0]);
+    expect(opciones.map((opcion) => opcion.textContent)).toEqual(['Editar', 'Eliminar']);
+    opciones.forEach((opcion) => expect(menu).toContainElement(opcion));
     expect(document.activeElement).toBe(opciones[0]);
   });
 
-  it('no ofrece ninguna opción para eliminar', () => {
-    RenderizarMenu();
+  it('elegir "Eliminar" con un clic o con Enter llama a alEliminar y no a alEditar', async () => {
+    const usuario = userEvent.setup();
+    const { alEditar, alEliminar } = RenderizarMenu();
 
-    expect(screen.queryByRole('menuitem', { name: /eliminar/i })).not.toBeInTheDocument();
+    await usuario.click(screen.getByRole('menuitem', { name: 'Eliminar' }));
+    expect(alEliminar).toHaveBeenCalledTimes(1);
+
+    screen.getByRole('menuitem', { name: 'Eliminar' }).focus();
+    await usuario.keyboard('{Enter}');
+    expect(alEliminar).toHaveBeenCalledTimes(2);
+    expect(alEditar).not.toHaveBeenCalled();
   });
 
   it('elegir "Editar" con un clic o con Enter llama a alEditar', async () => {
@@ -112,14 +129,24 @@ describe('MenuMovimiento', () => {
     expect(alCerrar).not.toHaveBeenCalled();
   });
 
-  it('las flechas, Inicio y Fin mueven el foco entre las opciones sin salir del menú', () => {
+  it('las flechas, Inicio y Fin recorren "Editar" y "Eliminar" sin salir del menú (AC-01)', () => {
     RenderizarMenu();
     const editar = screen.getByRole('menuitem', { name: 'Editar' });
+    const eliminar = screen.getByRole('menuitem', { name: 'Eliminar' });
 
-    for (const tecla of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
-      const evento = fireEvent.keyDown(editar, { key: tecla });
+    // Desde "Editar": abajo pasa a "Eliminar"; abajo de nuevo vuelve a
+    // "Editar"; arriba da la vuelta a "Eliminar"; Inicio y Fin van a los extremos.
+    for (const [tecla, esperado] of [
+      ['ArrowDown', eliminar],
+      ['ArrowDown', editar],
+      ['ArrowUp', eliminar],
+      ['ArrowUp', editar],
+      ['End', eliminar],
+      ['Home', editar],
+    ]) {
+      const evento = fireEvent.keyDown(document.activeElement, { key: tecla });
       expect(evento).toBe(false); // preventDefault: la página no se desplaza
-      expect(document.activeElement).toBe(editar);
+      expect(document.activeElement).toBe(esperado);
     }
   });
 
