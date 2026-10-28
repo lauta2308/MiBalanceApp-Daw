@@ -1466,6 +1466,19 @@ describe('FormularioMovimiento', () => {
       expect(await screen.findByText('USD 10.000,00')).toBeInTheDocument();
     });
 
+    it('(error E4-4, FR-44) sin movimientos en Cuenta, "Aceptar" del error de carga vuelve a Cuenta con el foco en "Añadir Gasto", no en <body>', async () => {
+      ConfigurarServidor();
+      RenderizarApp(`/movimientos/${CrearIdMovimiento(99)}/editar`);
+
+      const dialogo = await screen.findByRole('alertdialog');
+      expect(dialogo).toHaveTextContent(mensajeErrorCarga);
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Aceptar' }));
+
+      await EsperarCuenta();
+      expect(await screen.findByText('Aquí verá sus movimientos.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Añadir Gasto' })).toHaveFocus();
+    });
+
     it('(error E4-5) si falla la carga de categorías muestra el error de carga y "Guardar" sigue deshabilitado; "Aceptar" reintenta', async () => {
       ConfigurarGasto();
       servidor.fallar.categorias = true;
