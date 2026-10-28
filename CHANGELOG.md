@@ -38,3 +38,19 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 ### Cambiado
 - [FEAT-001b] Los servicios comparten un único acceso al cliente de
   Supabase, y las pruebas, sus ayudantes comunes.
+- [FIX-001] La lógica de la eliminación de movimientos pasa de la sección
+  Cuenta a un hook propio, sin cambiar su comportamiento.
+
+### Corregido
+- [FIX-001] Si la base devuelve un monto, un saldo, un tipo o una fecha con
+  formato inesperado, la sección Cuenta y el formulario de edición muestran
+  el error de carga con "Aceptar" para reintentar, en lugar de quedar en
+  blanco.
+- [FIX-001] Al cerrar un mensaje de error cuyo control de origen ya no está
+  en pantalla, el foco va al primer control de la pantalla actual, también
+  cuando "Aceptar" cambia de pantalla.
+- [FIX-001] Un clic en el fondo o en el texto de un mensaje de error ya no
+  saca el foco del mensaje.
+- [FIX-001] Los mensajes de error, la confirmación de eliminación y el menú
+  de cada fila ponen su foco inicial al aparecer, sin dejar una ventana en
+  la que el foco se perdía (era la causa de una prueba inestable).
