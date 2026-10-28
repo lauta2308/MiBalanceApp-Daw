@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId, useLayoutEffect, useRef } from 'react';
 import { textoBotonAceptar, textoIconoError } from './textos.js';
 
 // Mensaje de error (FR-44): diálogo modal que queda en pantalla hasta que se
@@ -9,7 +9,9 @@ export function MensajeError({ texto, alAceptar }) {
   const idTexto = useId();
   const botonAceptar = useRef(null);
 
-  useEffect(() => {
+  // El foco inicial se pone en el commit que monta el diálogo (useLayoutEffect),
+  // para que un clic en "Aceptar" que llegue antes de los efectos pasivos no lo pise.
+  useLayoutEffect(() => {
     botonAceptar.current?.focus();
   }, []);
 

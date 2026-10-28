@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import { ProveedorMensajes, useMensajes } from './ProveedorMensajes.jsx';
+import { AntesDeEfectosPasivos } from '../pruebas/antesDeEfectosPasivos.jsx';
 
 const mensajeGasto = 'Gasto registrado con éxito.';
 const mensajeIngreso = 'Ingreso registrado con éxito.';
@@ -447,5 +448,85 @@ describe('ProveedorMensajes', () => {
 
     expect(screen.getByRole('heading', { name: 'Pantalla de Destino' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Botón de Destino' })).not.toHaveFocus();
+  });
+});
+
+// Avisa cuando corre su efecto pasivo para `dependencia`: si al presionar
+// "Aceptar" todavía no avisó, el clic llegó antes de los efectos pasivos de
+// ese commit, sin depender de cómo pone el foco MensajeError.
+function MarcaEfectoPasivo({ dependencia, alCorrer }) {
+  useEffect(() => {
+    alCorrer(dependencia);
+  }, [dependencia, alCorrer]);
+  return null;
+}
+
+// Presiona "Aceptar" en el mismo commit que monta el error, antes de los
+// efectos pasivos (ver AntesDeEfectosPasivos). `alAntesDelClic` recibe, en ese
+// momento, si el efecto pasivo del commit seguía pendiente.
+function ArnesClicAntesDeEfectosPasivos({ alAntesDelClic }) {
+  const [intento, EstablecerIntento] = useState(0);
+  const ultimoEfectoPasivo = useRef(0);
+
+  const RegistrarEfectoPasivo = useCallback((intentoActual) => {
+    ultimoEfectoPasivo.current = intentoActual;
+  }, []);
+
+  const PresionarAceptar = useCallback(
+    (intentoActual) => {
+      if (intentoActual === 0) {
+        return;
+      }
+      alAntesDelClic({ efectoPasivoPendiente: ultimoEfectoPasivo.current !== intentoActual });
+      screen.getByRole('button', { name: 'Aceptar' }).click();
+    },
+    [alAntesDelClic],
+  );
+
+  return (
+    <AntesDeEfectosPasivos alComprometer={PresionarAceptar} dependencia={intento}>
+      <MarcaEfectoPasivo dependencia={intento} alCorrer={RegistrarEfectoPasivo} />
+      <ProveedorMensajes>
+        <PantallaErrorConClicInmediato alMostrar={() => EstablecerIntento((valor) => valor + 1)} />
+      </ProveedorMensajes>
+    </AntesDeEfectosPasivos>
+  );
+}
+
+function PantallaErrorConClicInmediato({ alMostrar }) {
+  const { MostrarError } = useMensajes();
+  const campoMonto = useRef(null);
+  return (
+    <>
+      <input aria-label="Monto" ref={campoMonto} />
+      <button
+        type="button"
+        onClick={() => {
+          MostrarError(mensajeMonto, { elementoFoco: campoMonto.current });
+          alMostrar();
+        }}
+      >
+        Mostrar Error
+      </button>
+    </>
+  );
+}
+
+describe('ProveedorMensajes con un clic antes de los efectos pasivos', () => {
+  // Guarda: falla sobre f7748eb (antes del punto 2) y pasa ahora; la regresión
+  // de componente está en MensajeError.test.jsx.
+  it('(guarda, regresión 4) "Aceptar" presionado antes de que corran los efectos pasivos del montaje devuelve el foco al elemento de origen', () => {
+    const alAntesDelClic = vi.fn();
+    render(
+      <MemoryRouter>
+        <ArnesClicAntesDeEfectosPasivos alAntesDelClic={alAntesDelClic} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar Error' }));
+
+    expect(alAntesDelClic).toHaveBeenCalledExactlyOnceWith({ efectoPasivoPendiente: true });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Monto' })).toHaveFocus();
   });
 });

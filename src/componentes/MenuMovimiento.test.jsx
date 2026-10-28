@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRef } from 'react';
 import { MenuMovimiento } from './MenuMovimiento.jsx';
+import { AntesDeEfectosPasivos } from '../pruebas/antesDeEfectosPasivos.jsx';
 
 // El menú se monta abierto, debajo del botón de la fila que lo abrió, como lo
 // usa ListaMovimientos. "Otro Botón" representa cualquier control de afuera;
@@ -39,6 +40,19 @@ function RenderizarMenu({ alEditar = vi.fn(), alEliminar = vi.fn(), alCerrar = v
     alCerrar,
     botonFila: screen.getByRole('button', { name: 'Fila Mercado' }),
   };
+}
+
+// El menú con su fila, envuelto en AntesDeEfectosPasivos.
+function MenuAntesDeEfectosPasivos({ alComprometer }) {
+  const botonFila = useRef(null);
+  return (
+    <AntesDeEfectosPasivos alComprometer={alComprometer}>
+      <button type="button" ref={botonFila}>
+        Fila Mercado
+      </button>
+      <MenuMovimiento botonFila={botonFila} alEditar={vi.fn()} alEliminar={vi.fn()} alCerrar={vi.fn()} />
+    </AntesDeEfectosPasivos>
+  );
 }
 
 describe('MenuMovimiento', () => {
@@ -168,5 +182,28 @@ describe('MenuMovimiento', () => {
 
     expect(alCerrar).toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Otro Botón' }));
+  });
+
+  function RenderizarMenuAntesDeEfectosPasivos(alComprometer) {
+    render(<MenuAntesDeEfectosPasivos alComprometer={alComprometer} />);
+  }
+
+  it('(regresión 4) "Editar" ya tiene el foco en el commit que abre el menú, antes de los efectos pasivos', () => {
+    let focoEnElCommit = null;
+    RenderizarMenuAntesDeEfectosPasivos(() => {
+      focoEnElCommit = document.activeElement;
+    });
+
+    expect(focoEnElCommit).toBe(screen.getByRole('menuitem', { name: 'Editar' }));
+  });
+
+  it('(regresión 4) Fin presionado antes de los efectos pasivos deja el foco en "Eliminar"', () => {
+    RenderizarMenuAntesDeEfectosPasivos(() => {
+      screen
+        .getByRole('menu')
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+    });
+
+    expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toHaveFocus();
   });
 });

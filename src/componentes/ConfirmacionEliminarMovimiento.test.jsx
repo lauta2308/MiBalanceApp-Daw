@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfirmacionEliminarMovimiento } from './ConfirmacionEliminarMovimiento.jsx';
+import { AntesDeEfectosPasivos } from '../pruebas/antesDeEfectosPasivos.jsx';
 
 const textoPregunta = '¿Está seguro que desea eliminar este movimiento?';
 // Vitest no procesa el CSS importado (llega vacío): la hoja se lee del disco.
@@ -187,5 +188,59 @@ describe('ConfirmacionEliminarMovimiento', () => {
     const confirmar = screen.getByRole('button', { name: 'Confirmar' });
     expect(confirmar).not.toHaveAttribute('aria-disabled');
     expect(ObtenerCancelar()).toBeEnabled();
+  });
+
+  it('(regresión 4) "Cancelar" ya tiene el foco en el commit que abre la confirmación, antes de los efectos pasivos', () => {
+    let focoEnElCommit = null;
+    render(
+      <AntesDeEfectosPasivos
+        alComprometer={() => {
+          focoEnElCommit = document.activeElement;
+        }}
+      >
+        <ConfirmacionEliminarMovimiento eliminando={false} alConfirmar={vi.fn()} alCancelar={vi.fn()} />
+      </AntesDeEfectosPasivos>,
+    );
+
+    expect(focoEnElCommit).toBe(ObtenerCancelar());
+  });
+
+  it('(regresión 4) "Cancelar" presionado antes de los efectos pasivos no vuelve a llevar el foco a "Cancelar"', () => {
+    function CancelarYVolverAFila() {
+      screen.getByRole('button', { name: 'Fila Mercado' }).focus();
+    }
+    render(
+      <AntesDeEfectosPasivos alComprometer={() => ObtenerCancelar().click()}>
+        <button type="button">Fila Mercado</button>
+        <ConfirmacionEliminarMovimiento
+          eliminando={false}
+          alConfirmar={vi.fn()}
+          alCancelar={CancelarYVolverAFila}
+        />
+      </AntesDeEfectosPasivos>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Fila Mercado' })).toHaveFocus();
+  });
+
+  it('(regresión 4) "Eliminando…" ya tiene el foco en el commit que pasa a eliminando, antes de los efectos pasivos', () => {
+    let focoAlEliminar = null;
+    function RegistrarFoco(eliminando) {
+      if (eliminando) {
+        focoAlEliminar = document.activeElement;
+      }
+    }
+    function Prueba({ eliminando }) {
+      return (
+        <AntesDeEfectosPasivos alComprometer={RegistrarFoco} dependencia={eliminando}>
+          <ConfirmacionEliminarMovimiento eliminando={eliminando} alConfirmar={vi.fn()} alCancelar={vi.fn()} />
+        </AntesDeEfectosPasivos>
+      );
+    }
+    const { rerender } = render(<Prueba eliminando={false} />);
+
+    rerender(<Prueba eliminando />);
+
+    expect(focoAlEliminar).toBe(screen.getByRole('button', { name: 'Eliminando…' }));
   });
 });

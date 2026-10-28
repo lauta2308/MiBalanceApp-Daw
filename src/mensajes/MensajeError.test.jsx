@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MensajeError } from './MensajeError.jsx';
+import { AntesDeEfectosPasivos } from '../pruebas/antesDeEfectosPasivos.jsx';
 
 const mensajeMonto = 'El monto debe ser mayor a 0.';
 
@@ -70,5 +71,36 @@ describe('MensajeError', () => {
     RenderizarConControlesAlrededor();
 
     expect(fireEvent.mouseDown(screen.getByRole('button', { name: 'Aceptar' }))).toBe(true);
+  });
+
+  it('(regresión 4) "Aceptar" ya tiene el foco en el commit que monta el mensaje, antes de los efectos pasivos', () => {
+    let focoEnElCommit = null;
+    render(
+      <AntesDeEfectosPasivos
+        alComprometer={() => {
+          focoEnElCommit = document.activeElement;
+        }}
+      >
+        <MensajeError texto={mensajeMonto} alAceptar={vi.fn()} />
+      </AntesDeEfectosPasivos>,
+    );
+
+    expect(focoEnElCommit).toBe(screen.getByRole('button', { name: 'Aceptar' }));
+  });
+
+  it('(regresión 4) un clic en "Aceptar" antes de los efectos pasivos no vuelve a llevar el foco a "Aceptar"', () => {
+    function AceptarYEnfocarAfuera() {
+      screen.getByRole('button', { name: 'Después' }).focus();
+    }
+    render(
+      <AntesDeEfectosPasivos
+        alComprometer={() => screen.getByRole('button', { name: 'Aceptar' }).click()}
+      >
+        <MensajeError texto={mensajeMonto} alAceptar={AceptarYEnfocarAfuera} />
+        <button type="button">Después</button>
+      </AntesDeEfectosPasivos>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Después' })).toHaveFocus();
   });
 });
