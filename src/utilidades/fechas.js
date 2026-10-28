@@ -33,6 +33,20 @@ export function ObtenerFechaHoyLocal() {
   return `${anio}-${mes}-${dia}`;
 }
 
+// Predicado que nunca lanza: rechaza lo que no es "AAAA-MM-DD" y los días que
+// no existen ("2026-02-30"), para que los servicios filtren la base (FR-45).
+export function EsFechaValida(textoFecha) {
+  if (typeof textoFecha !== 'string') {
+    return false;
+  }
+  try {
+    SepararFecha(textoFecha);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function FormatearFecha(textoFecha) {
   const { textoAnio, textoMes, textoDia } = SepararFecha(textoFecha);
   return `${textoDia}/${textoMes}/${textoAnio}`;

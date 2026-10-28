@@ -1,6 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { useLocation } from 'react-router';
 import { MensajeError } from './MensajeError.jsx';
 import { MensajeExito } from './MensajeExito.jsx';
+import { ObtenerPrimerControlEnfocable } from '../utilidades/foco.js';
 
 const duracionMensajeExitoMs = 3000;
 
@@ -13,11 +24,15 @@ export function ProveedorMensajes({ children }) {
   const temporizadorEscritura = useRef(null);
   const hayMensajeExito = useRef(false);
   const contadorMensajes = useRef(0);
+  const focoPendiente = useRef(null);
+  const cierreReciente = useRef(false);
+  const ubicacion = useLocation();
 
   useEffect(
     () => () => {
       clearTimeout(temporizadorExito.current);
       clearTimeout(temporizadorEscritura.current);
+      cierreReciente.current = false;
     },
     [],
   );
@@ -51,7 +66,10 @@ export function ProveedorMensajes({ children }) {
 
   // El error queda visible hasta "Aceptar"; al cerrarlo, el foco vuelve a
   // `elementoFoco` (un elemento del DOM, FR-44) o, si no se indicó, al
-  // elemento que tenía el foco al mostrar el error. Si ya había un error en
+  // elemento que tenía el foco al mostrar el error. Si ese elemento ya no está
+  // en pantalla (el usuario se fue de la sección) o era <body>, el foco pasa
+  // al primer control enfocable de la pantalla que queda después de
+  // `alAceptar`; si no hay ninguno, no se enfoca nada. Si ya había un error en
   // pantalla, se conserva su elemento de retorno (el foco estaba en su
   // "Aceptar"). Cada error tiene su propio id para que el diálogo se vuelva a
   // montar y "Aceptar" recupere el foco.
@@ -67,14 +85,53 @@ export function ProveedorMensajes({ children }) {
     }));
   }, []);
 
+  // El foco se resuelve en el commit que cierra el error, no acá: el diálogo
+  // ya no está y la pantalla es la que dejó `alAceptar` (por ejemplo, Cuenta
+  // tras VolverACuenta), que puede haber desmontado `elementoFoco`.
   function ManejarAceptarError() {
     const errorActual = mensajeError;
+    focoPendiente.current = {
+      elementoFoco: errorActual?.elementoFoco,
+      puedeNavegar: Boolean(errorActual?.alAceptar),
+    };
     EstablecerMensajeError(null);
     errorActual?.alAceptar?.();
-    if (errorActual?.elementoFoco?.isConnected) {
-      errorActual.elementoFoco.focus();
-    }
   }
+
+  useLayoutEffect(() => {
+    const pendiente = focoPendiente.current;
+    if (!pendiente) {
+      return;
+    }
+    focoPendiente.current = null;
+    cierreReciente.current = false;
+    if (mensajeError) {
+      return;
+    }
+    if (EsElementoFocoValido(pendiente.elementoFoco)) {
+      pendiente.elementoFoco.focus();
+    } else {
+      EnfocarPrimerControl();
+    }
+    cierreReciente.current = pendiente.puedeNavegar;
+  }, [mensajeError]);
+
+  // react-router aplica la navegación de `alAceptar` (por ejemplo,
+  // VolverACuenta) en una transición, en un commit posterior al que cerró el
+  // error: si esa pantalla nueva dejó el foco en <body>, se vuelve a aplicar
+  // la reserva. Solo queda armada tras cerrar un error con `alAceptar` (el
+  // único que puede navegar) y se consume en la primera navegación que sigue;
+  // sin ella no se hace nada, para no pisar el foco que pone Cuenta al volver
+  // de un formulario.
+  useLayoutEffect(() => {
+    if (!cierreReciente.current) {
+      return;
+    }
+    cierreReciente.current = false;
+    if (!EsElementoFocoValido(document.activeElement)) {
+      EnfocarPrimerControl();
+    }
+  }, [ubicacion.key]);
 
   const valorContexto = useMemo(() => ({ MostrarExito, MostrarError }), [MostrarExito, MostrarError]);
 
@@ -92,6 +149,19 @@ export function ProveedorMensajes({ children }) {
         />
       )}
     </ContextoMensajes.Provider>
+  );
+}
+
+function EnfocarPrimerControl() {
+  ObtenerPrimerControlEnfocable(document.querySelector('main') ?? document.body)?.focus();
+}
+
+// <body> y <html> son el foco "de nadie": no cuentan como elemento de retorno.
+function EsElementoFocoValido(elemento) {
+  return (
+    Boolean(elemento?.isConnected) &&
+    elemento !== document.body &&
+    elemento !== document.documentElement
   );
 }
 

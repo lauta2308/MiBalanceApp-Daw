@@ -470,6 +470,38 @@ test('con el menú de una fila abierto, un clic en "Añadir Ingreso" cierra el m
   await expect(pagina.getByRole('heading', { level: 1, name: 'Añadir Ingreso' })).toBeVisible();
 });
 
+// --- Clic dentro del mensaje de error (FIX-001 AC-72) ---
+
+// La lectura de movimientos responde con un error del servidor: aparece "No se pudieron cargar sus
+// movimientos." Un clic en el fondo o en el texto no le saca el foco a "Aceptar", y el Tab siguiente
+// tampoco.
+test('con el error de carga en pantalla, un clic en el fondo o en el texto y después Tab dejan el foco en "Aceptar" (AC-72)', async ({
+  paginaConUsuario: pagina,
+}) => {
+  await pagina.route('**/rest/v1/bav_movimientos*', (ruta) =>
+    ruta.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+  );
+  await pagina.goto('/');
+  const dialogo = pagina.getByRole('alertdialog');
+  const texto = dialogo.getByText('No se pudieron cargar sus movimientos. Vuelva a intentarlo.');
+  await expect(texto).toBeVisible();
+  const botonAceptar = dialogo.getByRole('button', { name: 'Aceptar' });
+  await expect(botonAceptar).toBeFocused();
+
+  // El fondo se cliquea en una esquina, afuera de la caja del mensaje.
+  for (const [zona, Cliquear] of [
+    ['el fondo', () => pagina.locator('.fondo-mensaje-error').click({ position: { x: 5, y: 5 } })],
+    ['el texto', () => texto.click()],
+  ]) {
+    await Cliquear();
+    const elementoConFoco = await pagina.evaluate(() => document.activeElement?.outerHTML.slice(0, 120));
+    await expect(botonAceptar, `foco tras el clic en ${zona}: ${elementoConFoco}`).toBeFocused();
+    await pagina.keyboard.press('Tab');
+    await expect(botonAceptar, `foco tras Tab después del clic en ${zona}`).toBeFocused();
+  }
+  await expect(dialogo).toBeVisible();
+});
+
 // --- Contraste (AC-62) ---
 
 function ObtenerLuminancia(colorCss) {

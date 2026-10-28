@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId, useLayoutEffect, useRef } from 'react';
 import {
   textoBotonCancelar,
   textoBotonConfirmar,
@@ -16,16 +16,18 @@ import {
 // no saca el foco de "Eliminando…" y Escape se ignora (FR-06). Un clic fuera
 // de un botón habilitado (el fondo, el texto o "Cancelar" deshabilitado) no
 // mueve el foco: si no, quedaría en <body> y Tab saldría del modal (NFR-04).
+// Ambos focos se ponen en el commit (useLayoutEffect), para que una
+// interacción que llegue antes de los efectos pasivos no los pise.
 export function ConfirmacionEliminarMovimiento({ eliminando, alConfirmar, alCancelar }) {
   const idTexto = useId();
   const botonCancelar = useRef(null);
   const botonConfirmar = useRef(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     botonCancelar.current?.focus();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (eliminando) {
       botonConfirmar.current?.focus();
     }

@@ -26,6 +26,8 @@ const servidor = vi.hoisted(() => ({
   retenerMovimiento: null,
   // Si no es null, la lectura por id devuelve este monto (la lista no cambia).
   montoLecturaPorId: null,
+  // Si no es null, la lectura por id reemplaza estos campos (p. ej. fecha o tipo).
+  camposLecturaPorId: null,
 }));
 
 vi.mock('../servicios/clienteSupabase.js', () => {
@@ -54,7 +56,10 @@ vi.mock('../servicios/clienteSupabase.js', () => {
       }
       const { id, fecha, tipo, monto, id_categoria } = fila;
       const montoLeido = servidor.montoLecturaPorId ?? monto;
-      return { data: { id, fecha, tipo, monto: montoLeido, id_categoria }, error: null };
+      return {
+        data: { id, fecha, tipo, monto: montoLeido, id_categoria, ...servidor.camposLecturaPorId },
+        error: null,
+      };
     }
     if (registro.tabla === 'bav_movimientos') {
       const [desde, hasta] = registro.range ?? [0, servidor.movimientos.length - 1];
@@ -399,6 +404,7 @@ describe('FormularioMovimiento', () => {
     servidor.retenerCategorias = null;
     servidor.retenerMovimiento = null;
     servidor.montoLecturaPorId = null;
+    servidor.camposLecturaPorId = null;
     ConfigurarServidor();
   });
 
@@ -1428,6 +1434,24 @@ describe('FormularioMovimiento', () => {
     });
 
     it.each([
+      ['una fecha que no existe ("2026-02-30")', { fecha: '2026-02-30' }],
+      ['un tipo desconocido ("OTRO")', { tipo: 'OTRO' }],
+    ])('(error E4-4, FR-45) si la lectura trae %s muestra el error de carga y "Aceptar" vuelve a Cuenta', async (_, campos) => {
+      ConfigurarGasto();
+      servidor.camposLecturaPorId = campos;
+      RenderizarApp(`/movimientos/${idGasto}/editar`);
+
+      const dialogo = await screen.findByRole('alertdialog');
+      expect(dialogo).toHaveTextContent(mensajeErrorCarga);
+      expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Aceptar' }));
+
+      await EsperarCuenta();
+      expect(screen.queryByRole('heading', { level: 1, name: 'Editar Movimiento' })).not.toBeInTheDocument();
+      expect(await screen.findByText('USD 10.000,00')).toBeInTheDocument();
+    });
+
+    it.each([
       ['un id inexistente', `/movimientos/${CrearIdMovimiento(99)}/editar`],
       ['un id mal formado', '/movimientos/abc/editar'],
     ])('(error E4-4) con %s en la ruta muestra el error de carga y "Aceptar" vuelve a Cuenta', async (_, ruta) => {
@@ -1440,6 +1464,19 @@ describe('FormularioMovimiento', () => {
 
       await EsperarCuenta();
       expect(await screen.findByText('USD 10.000,00')).toBeInTheDocument();
+    });
+
+    it('(error E4-4, FR-44) sin movimientos en Cuenta, "Aceptar" del error de carga vuelve a Cuenta con el foco en "Añadir Gasto", no en <body>', async () => {
+      ConfigurarServidor();
+      RenderizarApp(`/movimientos/${CrearIdMovimiento(99)}/editar`);
+
+      const dialogo = await screen.findByRole('alertdialog');
+      expect(dialogo).toHaveTextContent(mensajeErrorCarga);
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Aceptar' }));
+
+      await EsperarCuenta();
+      expect(await screen.findByText('Aquí verá sus movimientos.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Añadir Gasto' })).toHaveFocus();
     });
 
     it('(error E4-5) si falla la carga de categorías muestra el error de carga y "Guardar" sigue deshabilitado; "Aceptar" reintenta', async () => {

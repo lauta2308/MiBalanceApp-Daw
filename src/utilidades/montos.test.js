@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ConvertirMontoParaApi,
+  EsMontoApiValido,
   FiltrarEntradaMonto,
   FormatearMonto,
   FormatearMontoConSigno,
@@ -194,5 +195,15 @@ describe('ValidarMonto', () => {
     expect(ValidarMonto('1.500,50')).toEqual({ valido: true });
     expect(ValidarMonto('0,01')).toEqual({ valido: true });
     expect(ValidarMonto(',5')).toEqual({ valido: true });
+  });
+});
+
+describe('EsMontoApiValido', () => {
+  it.each([['0.00'], ['10'], ['-5.5'], ['1500.50']])('acepta %j', (texto) => {
+    expect(EsMontoApiValido(texto)).toBe(true);
+  });
+
+  it.each([['abc'], ['1,5'], ['1.555'], [''], [10], [null], [undefined]])('rechaza %j sin lanzar', (valor) => {
+    expect(EsMontoApiValido(valor)).toBe(false);
   });
 });

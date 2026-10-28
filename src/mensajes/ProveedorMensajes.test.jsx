@@ -1,7 +1,9 @@
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import { ProveedorMensajes, useMensajes } from './ProveedorMensajes.jsx';
+import { AntesDeEfectosPasivos } from '../pruebas/antesDeEfectosPasivos.jsx';
 
 const mensajeGasto = 'Gasto registrado con éxito.';
 const mensajeIngreso = 'Ingreso registrado con éxito.';
@@ -36,11 +38,149 @@ function ComponentePrueba({ alAceptar }) {
   );
 }
 
+// Muestra un error cuyo elementoFoco sale del DOM antes de "Aceptar", como la
+// fila de un movimiento cuando el usuario se va de Cuenta (FR-44).
+function ComponenteFocoDesconectado({ conOtrosControles = true }) {
+  const { MostrarError } = useMensajes();
+  const [mostrarControles, EstablecerMostrarControles] = useState(true);
+  const campoTemporal = useRef(null);
+
+  function ManejarError() {
+    MostrarError(mensajeGuardar, { elementoFoco: campoTemporal.current });
+    EstablecerMostrarControles(false);
+  }
+
+  return (
+    <>
+      <h1>Pantalla Actual</h1>
+      {conOtrosControles && (
+        <button type="button" disabled>
+          Deshabilitado
+        </button>
+      )}
+      {conOtrosControles && <button type="button">Primer Botón</button>}
+      {mostrarControles && <input aria-label="Campo Temporal" ref={campoTemporal} />}
+      {mostrarControles && (
+        <button type="button" onClick={ManejarError}>
+          Error y Quitar Campo
+        </button>
+      )}
+    </>
+  );
+}
+
+// Muestra un error cuyo "Aceptar" cambia de pantalla, como VolverACuenta tras
+// un error de carga de la edición; el campo de origen se va con la pantalla.
+function ComponenteCambioPantalla() {
+  const { MostrarError } = useMensajes();
+  const [pantallaNueva, EstablecerPantallaNueva] = useState(false);
+  const [mostrarCampo, EstablecerMostrarCampo] = useState(true);
+  const campoTemporal = useRef(null);
+  const botonOrigen = useRef(null);
+
+  function ManejarError() {
+    MostrarError(mensajeGuardar, {
+      elementoFoco: campoTemporal.current,
+      alAceptar: () => EstablecerPantallaNueva(true),
+    });
+    EstablecerMostrarCampo(false);
+  }
+
+  // El origen sigue en el DOM al aceptar: lo desmonta el cambio de pantalla.
+  function ManejarErrorConOrigenConectado() {
+    MostrarError(mensajeGuardar, {
+      elementoFoco: botonOrigen.current,
+      alAceptar: () => EstablecerPantallaNueva(true),
+    });
+  }
+
+  if (pantallaNueva) {
+    // En un <section> para que React no reutilice los nodos de la pantalla anterior.
+    return (
+      <section>
+        <h1>Pantalla Nueva</h1>
+        <button type="button">Botón de la Pantalla Nueva</button>
+      </section>
+    );
+  }
+  return (
+    <>
+      <h1>Pantalla Anterior</h1>
+      <button type="button">Botón de la Pantalla Anterior</button>
+      {mostrarCampo && <input aria-label="Campo Temporal" ref={campoTemporal} />}
+      <button type="button" onClick={ManejarError}>
+        Error y Cambiar Pantalla
+      </button>
+      <button type="button" ref={botonOrigen} onClick={ManejarErrorConOrigenConectado}>
+        Error con Origen Conectado
+      </button>
+    </>
+  );
+}
+
+// Pantalla de origen cuyo "Aceptar" navega con el router real, como
+// VolverACuenta: react-router aplica la navegación en una transición, en un
+// commit posterior al que cierra el error.
+function PantallaOrigenNavegacion() {
+  const { MostrarError } = useMensajes();
+  const navegar = useNavigate();
+  const botonOrigen = useRef(null);
+  return (
+    <>
+      <h1>Pantalla de Origen</h1>
+      <button
+        type="button"
+        ref={botonOrigen}
+        onClick={() =>
+          MostrarError(mensajeGuardar, { elementoFoco: botonOrigen.current, alAceptar: () => navegar('/destino') })
+        }
+      >
+        Error y Navegar
+      </button>
+    </>
+  );
+}
+
+// Un error sin `alAceptar` no navega: la navegación posterior del usuario no
+// debe recibir la reserva de foco.
+function PantallaErrorSinNavegar() {
+  const { MostrarError } = useMensajes();
+  const navegar = useNavigate();
+  const botonOrigen = useRef(null);
+  return (
+    <>
+      <h1>Pantalla de Origen</h1>
+      <button
+        type="button"
+        ref={botonOrigen}
+        onClick={() => MostrarError(mensajeGuardar, { elementoFoco: botonOrigen.current })}
+      >
+        Error sin Navegar
+      </button>
+      <button type="button" onClick={() => navegar('/destino')}>
+        Ir al Destino
+      </button>
+    </>
+  );
+}
+
+function PantallaDestinoNavegacion() {
+  return (
+    <section>
+      <h1>Pantalla de Destino</h1>
+      <button type="button">Botón de Destino</button>
+    </section>
+  );
+}
+
+// El proveedor usa la ubicación del router (FR-44), como en App.
 function RenderizarProveedor(alAceptar = vi.fn()) {
   render(
-    <ProveedorMensajes>
-      <ComponentePrueba alAceptar={alAceptar} />
-    </ProveedorMensajes>,
+    <MemoryRouter>
+      <ProveedorMensajes>
+        <ComponentePrueba alAceptar={alAceptar} />
+      </ProveedorMensajes>
+    </MemoryRouter>,
   );
 }
 
@@ -173,5 +313,220 @@ describe('ProveedorMensajes', () => {
     expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
     expect(screen.getByRole('alertdialog')).toHaveTextContent(mensajeGuardar);
     expect(screen.getByRole('button', { name: 'Aceptar' })).toHaveFocus();
+  });
+
+  it('(FR-44) si elementoFoco ya no está en el DOM, "Aceptar" lleva el foco al primer botón de la pantalla, no a <body> ni al mensaje', () => {
+    render(
+      <MemoryRouter>
+        <ProveedorMensajes>
+          <ComponenteFocoDesconectado />
+        </ProveedorMensajes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Error y Quitar Campo' }));
+    expect(screen.queryByLabelText('Campo Temporal')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aceptar' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(screen.getByRole('button', { name: 'Primer Botón' })).toHaveFocus();
+  });
+
+  it('(FR-44) sin ningún control enfocable fuera del mensaje, "Aceptar" cierra el error sin lanzar', () => {
+    render(
+      <MemoryRouter>
+        <ProveedorMensajes>
+          <ComponenteFocoDesconectado conOtrosControles={false} />
+        </ProveedorMensajes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Error y Quitar Campo' }));
+
+    expect(() => fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }))).not.toThrow();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pantalla Actual' })).toBeInTheDocument();
+  });
+
+  it('(FR-44) si "Aceptar" cambia de pantalla y elementoFoco ya no está, el foco va al primer control de la pantalla nueva', () => {
+    render(
+      <MemoryRouter>
+        <ProveedorMensajes>
+          <ComponenteCambioPantalla />
+        </ProveedorMensajes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Error y Cambiar Pantalla' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pantalla Nueva' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Botón de la Pantalla Nueva' })).toHaveFocus();
+  });
+
+  it('(FR-44) un error mostrado con el foco en <body> deja el foco, al aceptar, en el primer control de la pantalla', () => {
+    RenderizarProveedor();
+
+    // fireEvent.click no mueve el foco: el error se muestra con el foco en <body>.
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.click(screen.getByRole('button', { name: 'Error sin Foco' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Monto')).toHaveFocus();
+  });
+
+  it('(FR-44) si elementoFoco está conectado al aceptar pero "Aceptar" cambia de pantalla y lo desmonta, el foco va al primer control de la pantalla nueva', () => {
+    render(
+      <MemoryRouter>
+        <ProveedorMensajes>
+          <ComponenteCambioPantalla />
+        </ProveedorMensajes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Error con Origen Conectado' }));
+    expect(screen.getByRole('button', { name: 'Error con Origen Conectado' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Error con Origen Conectado' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Botón de la Pantalla Nueva' })).toHaveFocus();
+  });
+
+  it('(FR-44) si "Aceptar" navega con el router y desmonta elementoFoco, el foco va al primer control de la pantalla nueva', async () => {
+    render(
+      <MemoryRouter initialEntries={['/origen']}>
+        <main>
+          <ProveedorMensajes>
+            <Routes>
+              <Route path="/origen" element={<PantallaOrigenNavegacion />} />
+              <Route path="/destino" element={<PantallaDestinoNavegacion />} />
+            </Routes>
+          </ProveedorMensajes>
+        </main>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Error y Navegar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pantalla de Destino' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Botón de Destino' })).toHaveFocus();
+  });
+
+  it('(FR-44) tras cerrar un error sin "alAceptar", una navegación posterior del usuario no recibe la reserva de foco', async () => {
+    render(
+      <MemoryRouter initialEntries={['/origen']}>
+        <main>
+          <ProveedorMensajes>
+            <Routes>
+              <Route path="/origen" element={<PantallaErrorSinNavegar />} />
+              <Route path="/destino" element={<PantallaDestinoNavegacion />} />
+            </Routes>
+          </ProveedorMensajes>
+        </main>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Error sin Navegar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+    expect(screen.getByRole('button', { name: 'Error sin Navegar' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ir al Destino' }));
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(screen.getByRole('heading', { name: 'Pantalla de Destino' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Botón de Destino' })).not.toHaveFocus();
+  });
+});
+
+// Avisa cuando corre su efecto pasivo para `dependencia`: si al presionar
+// "Aceptar" todavía no avisó, el clic llegó antes de los efectos pasivos de
+// ese commit, sin depender de cómo pone el foco MensajeError.
+function MarcaEfectoPasivo({ dependencia, alCorrer }) {
+  useEffect(() => {
+    alCorrer(dependencia);
+  }, [dependencia, alCorrer]);
+  return null;
+}
+
+// Presiona "Aceptar" en el mismo commit que monta el error, antes de los
+// efectos pasivos (ver AntesDeEfectosPasivos). `alAntesDelClic` recibe, en ese
+// momento, si el efecto pasivo del commit seguía pendiente.
+function ArnesClicAntesDeEfectosPasivos({ alAntesDelClic }) {
+  const [intento, EstablecerIntento] = useState(0);
+  const ultimoEfectoPasivo = useRef(0);
+
+  const RegistrarEfectoPasivo = useCallback((intentoActual) => {
+    ultimoEfectoPasivo.current = intentoActual;
+  }, []);
+
+  const PresionarAceptar = useCallback(
+    (intentoActual) => {
+      if (intentoActual === 0) {
+        return;
+      }
+      alAntesDelClic({ efectoPasivoPendiente: ultimoEfectoPasivo.current !== intentoActual });
+      screen.getByRole('button', { name: 'Aceptar' }).click();
+    },
+    [alAntesDelClic],
+  );
+
+  return (
+    <AntesDeEfectosPasivos alComprometer={PresionarAceptar} dependencia={intento}>
+      <MarcaEfectoPasivo dependencia={intento} alCorrer={RegistrarEfectoPasivo} />
+      <ProveedorMensajes>
+        <PantallaErrorConClicInmediato alMostrar={() => EstablecerIntento((valor) => valor + 1)} />
+      </ProveedorMensajes>
+    </AntesDeEfectosPasivos>
+  );
+}
+
+function PantallaErrorConClicInmediato({ alMostrar }) {
+  const { MostrarError } = useMensajes();
+  const campoMonto = useRef(null);
+  return (
+    <>
+      <input aria-label="Monto" ref={campoMonto} />
+      <button
+        type="button"
+        onClick={() => {
+          MostrarError(mensajeMonto, { elementoFoco: campoMonto.current });
+          alMostrar();
+        }}
+      >
+        Mostrar Error
+      </button>
+    </>
+  );
+}
+
+describe('ProveedorMensajes con un clic antes de los efectos pasivos', () => {
+  // Guarda: falla sobre f7748eb (antes del punto 2) y pasa ahora; la regresión
+  // de componente está en MensajeError.test.jsx.
+  it('(guarda, regresión 4) "Aceptar" presionado antes de que corran los efectos pasivos del montaje devuelve el foco al elemento de origen', () => {
+    const alAntesDelClic = vi.fn();
+    render(
+      <MemoryRouter>
+        <ArnesClicAntesDeEfectosPasivos alAntesDelClic={alAntesDelClic} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar Error' }));
+
+    expect(alAntesDelClic).toHaveBeenCalledExactlyOnceWith({ efectoPasivoPendiente: true });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Monto' })).toHaveFocus();
   });
 });

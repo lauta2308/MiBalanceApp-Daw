@@ -135,6 +135,63 @@ describe('servicio de movimientos', () => {
     });
   });
 
+  describe('ObtenerPaginaMovimientos con datos o página inválidos', () => {
+    it.each([[0], [-1], [1.5], [NaN], ['1'], [undefined]])(
+      'con la página %j devuelve { ok: false } sin llamar a Supabase',
+      async (numeroPagina) => {
+        ConfigurarMovimientos(CrearMovimientos(3));
+
+        await expect(ObtenerPaginaMovimientos(numeroPagina)).resolves.toEqual({ ok: false });
+        expect(simulacion.consultas).toHaveLength(0);
+      },
+    );
+
+    it('con la página 1 pide el rango 0–49', async () => {
+      ConfigurarMovimientos(CrearMovimientos(3));
+
+      const resultado = await ObtenerPaginaMovimientos(1);
+
+      expect(resultado.ok).toBe(true);
+      expect(simulacion.consultas).toHaveLength(1);
+      expect(simulacion.consultas[0].range).toEqual([0, 49]);
+    });
+
+    it.each([
+      ['un monto "abc"', { monto: 'abc' }],
+      ['un monto negativo "-10.00"', { monto: '-10.00' }],
+      ['un monto que no es texto (10)', { monto: 10 }],
+      ['un tipo "OTRO"', { tipo: 'OTRO' }],
+      ['una fecha "2026-02-30"', { fecha: '2026-02-30' }],
+    ])('(FR-45) con una fila de %s devuelve exactamente { ok: false }', async (_, cambios) => {
+      const movimientos = CrearMovimientos(3);
+      movimientos[1] = { ...movimientos[1], ...cambios };
+      ConfigurarMovimientos(movimientos);
+
+      await expect(ObtenerPaginaMovimientos(1)).resolves.toEqual({ ok: false });
+    });
+
+    it('con todas las filas válidas devuelve { ok: true } con las filas sin cambios', async () => {
+      const movimientos = [
+        ...CrearMovimientos(2),
+        {
+          id: 'mov-ingreso',
+          fecha: '2024-02-29',
+          tipo: 'INGRESO',
+          monto: '0.5',
+          nombre_categoria: 'Sueldo',
+          creado_en: '2024-02-29T12:00:00+00:00',
+        },
+      ];
+      ConfigurarMovimientos(movimientos.map((movimiento) => ({ ...movimiento })));
+
+      await expect(ObtenerPaginaMovimientos(1)).resolves.toEqual({
+        ok: true,
+        movimientos,
+        total: 3,
+      });
+    });
+  });
+
   describe('AgregarMovimiento', () => {
     it('llama una vez a basp_agregar_movimiento con el monto convertido para la API y devuelve { ok: true } (AC-12, AC-20)', async () => {
       const resultado = await AgregarMovimiento({
@@ -265,6 +322,17 @@ describe('servicio de movimientos', () => {
 
       expect(resultado).toEqual({ ok: false });
       expect(JSON.stringify(resultado)).not.toMatch(/invalid input|Failed to fetch|22P02/);
+    });
+
+    it.each([
+      ['un monto "abc"', { monto: 'abc' }],
+      ['un monto negativo "-10.00"', { monto: '-10.00' }],
+      ['un tipo "OTRO"', { tipo: 'OTRO' }],
+      ['una fecha "2026-02-30"', { fecha: '2026-02-30' }],
+    ])('(FR-45, E4-4) con %s devuelve exactamente { ok: false }', async (_, cambios) => {
+      simulacion.responderMovimientos = () => ({ data: { ...movimiento, ...cambios }, error: null });
+
+      await expect(ObtenerMovimiento(idMovimiento)).resolves.toEqual({ ok: false });
     });
   });
 

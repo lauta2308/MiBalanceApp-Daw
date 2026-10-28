@@ -48,6 +48,7 @@ vi.mock('../servicios/clienteSupabase.js', () => {
   return { clienteSupabase: { from: (tabla) => CrearConsulta(tabla), rpc: LlamarRpc } };
 });
 
+import { FlechaVolver } from '../componentes/FlechaVolver.jsx';
 import { ProveedorMensajes } from '../mensajes/ProveedorMensajes.jsx';
 import { SeccionCuenta } from './SeccionCuenta.jsx';
 
@@ -142,6 +143,39 @@ function RenderizarSeccionConHistorial() {
           <Route path="/anterior" element={<h1>Pantalla Anterior</h1>} />
         </Routes>
       </ProveedorMensajes>
+      <BotonAtrasNavegador />
+    </MemoryRouter>,
+  );
+}
+
+// "Añadir Gasto" simulada: como en FormularioMovimiento, su primer control es
+// la flecha para volver atrás (FlechaVolver, primer hijo del encabezado).
+function PantallaAnadirGasto() {
+  const navegar = useNavigate();
+  return (
+    <section className="formulario-movimiento">
+      <header className="encabezado-formulario">
+        <FlechaVolver alVolver={() => navegar('/')} />
+        <h1 className="titulo-formulario">Añadir Gasto</h1>
+      </header>
+      <button type="button">Guardar</button>
+    </section>
+  );
+}
+
+// Cuenta con "Añadir Gasto" como entrada anterior del historial, dentro de un
+// <main> como en App; el Atrás del navegador queda fuera de la página.
+function RenderizarSeccionDesdeAnadirGasto() {
+  render(
+    <MemoryRouter initialEntries={['/gasto/nuevo', '/']} initialIndex={1}>
+      <main>
+        <ProveedorMensajes>
+          <Routes>
+            <Route path="/" element={<SeccionCuenta />} />
+            <Route path="/gasto/nuevo" element={<PantallaAnadirGasto />} />
+          </Routes>
+        </ProveedorMensajes>
+      </main>
       <BotonAtrasNavegador />
     </MemoryRouter>,
   );
@@ -667,6 +701,56 @@ describe('SeccionCuenta', () => {
     expect(screen.queryByText(/^USD /)).not.toBeInTheDocument();
   });
 
+  it('(AC-70, FR-45) con un movimiento de monto "abc" muestra el error de carga en lugar de quedar vacía, y "Aceptar" con datos válidos muestra la lista y el saldo', async () => {
+    const usuario = userEvent.setup();
+    ConfigurarServidor({
+      cuenta: CrearCuenta('8500.00'),
+      movimientos: [
+        CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado'),
+        CrearMovimiento('m2', '2026-09-16', 'GASTO', 'abc', 'Café'),
+      ],
+    });
+    RenderizarSeccion();
+
+    const dialogo = await screen.findByRole('alertdialog');
+    expect(dialogo).toHaveTextContent(mensajeErrorCarga);
+    expect(within(dialogo).getByRole('button', { name: 'Aceptar' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+
+    ConfigurarServidor({
+      cuenta: CrearCuenta('8500.00'),
+      movimientos: [CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado')],
+    });
+    await usuario.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(await screen.findByText('USD 8.500,00')).toBeInTheDocument();
+    expect(screen.getByText('-1.500,00')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('(AC-70, FR-45) con la cuenta con saldo "abc" muestra el error de carga en lugar de quedar vacía, y "Aceptar" con datos válidos muestra la lista y el saldo', async () => {
+    const usuario = userEvent.setup();
+    ConfigurarServidor({
+      cuenta: CrearCuenta('abc'),
+      movimientos: [CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado')],
+    });
+    RenderizarSeccion();
+
+    const dialogo = await screen.findByRole('alertdialog');
+    expect(dialogo).toHaveTextContent(mensajeErrorCarga);
+    expect(screen.queryByText(/^USD /)).not.toBeInTheDocument();
+
+    ConfigurarServidor({
+      cuenta: CrearCuenta('8500.00'),
+      movimientos: [CrearMovimiento('m1', '2026-09-17', 'GASTO', '1500.00', 'Mercado')],
+    });
+    await usuario.click(screen.getByRole('button', { name: 'Aceptar' }));
+
+    expect(await screen.findByText('USD 8.500,00')).toBeInTheDocument();
+    expect(screen.getByText('-1.500,00')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
   it('nunca pide más de 50 filas al servidor', async () => {
     ConfigurarServidor({ movimientos: CrearMovimientos(120) });
     RenderizarSeccion();
@@ -992,6 +1076,27 @@ describe('SeccionCuenta', () => {
       } finally {
         espiaErrores.mockRestore();
       }
+    });
+
+    it('(AC-71, FR-44) si se vuelve a "Añadir Gasto" con Atrás y la eliminación falla, "Aceptar" deja el foco en la flecha para volver atrás', async () => {
+      ConfigurarCuentaAc03();
+      simulacion.responderRpc = () => ({ data: null, error: { code: 'BA500' } });
+      RenderizarSeccionDesdeAnadirGasto();
+      await screen.findByText('Sueldo');
+      const retencion = RetenerRpc();
+      AbrirConfirmacion(idIngreso);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+      await vi.waitFor(() => expect(retencion.liberar).toBeTypeOf('function'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Atrás del Navegador' }));
+      await screen.findByRole('heading', { name: 'Añadir Gasto' });
+      retencion.liberar();
+
+      const error = await screen.findByRole('alertdialog', { name: mensajeErrorEliminar });
+      fireEvent.click(within(error).getByRole('button', { name: 'Aceptar' }));
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Volver atrás' })).toHaveFocus();
     });
 
     describe('con temporizadores falsos', () => {

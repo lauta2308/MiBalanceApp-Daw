@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 // Controles que reciben el foco al presionarlos con el puntero. Se excluyen
 // los deshabilitados y el enlace sin href; la etiqueta cuenta solo si tiene un
@@ -35,7 +35,9 @@ function RecibeFocoAlPresionar(elemento) {
 export function MenuMovimiento({ id, idBotonFila, botonFila, alEditar, alEliminar, alCerrar }) {
   const menu = useRef(null);
 
-  useEffect(() => {
+  // El foco inicial se pone en el commit que abre el menú (useLayoutEffect),
+  // para que una tecla que llegue antes de los efectos pasivos no lo pise.
+  useLayoutEffect(() => {
     menu.current?.querySelector('[role="menuitem"]')?.focus();
   }, []);
 

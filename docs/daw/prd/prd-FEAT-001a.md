@@ -6,7 +6,7 @@
 | Ticket padre | FEAT-001 (Cuenta y Movimientos) |
 | Tracker | none |
 | Date | 2026-10-25 |
-| PRD loops | 4 |
+| PRD loops | 5 |
 
 > Sub-ticket de FEAT-001. Deriva de `docs/daw/prd/PRD.md` (PRD-001) y `docs/daw/prd/INTERFAZ.md`.
 > Cada requerimiento indica entre paréntesis su origen: `RF-xx` y `RNF-xx` de `PRD.md`, `UI-xx` de
@@ -106,8 +106,8 @@ anónimo de Supabase, de forma provisoria y aislada (ver "Stack" en `AGENTS.md`)
 **Mensajes**
 
 - FR-43 (RF-69, RF-104, UI-14): El sistema debe mostrar "Gasto registrado con éxito." o "Ingreso registrado con éxito." al completar el alta, con un ícono de tic verde, durante 3 segundos, cerrándolo solo, sin botón "Aceptar" y sin impedir seguir usando la aplicación; un mensaje de éxito nuevo reemplaza al que esté en pantalla y cuenta sus propios 3 segundos desde que aparece.
-- FR-44 (RF-105, UI-15): El sistema debe mostrar cada mensaje de error, incluidos los de validación, con un ícono de cruz roja, hasta que el usuario presione su botón "Aceptar"; al cerrar un error de validación, el formulario sigue abierto con todos los datos ingresados y el foco vuelve al campo con el error.
-- FR-45 (RNF-07): El sistema debe mostrar el mensaje "No se pudieron cargar sus movimientos. Vuelva a intentarlo." cuando falle la carga de la cuenta, el saldo o la lista; al presionar "Aceptar" debe reintentar la carga.
+- FR-44 (RF-105, UI-15): El sistema debe mostrar cada mensaje de error, incluidos los de validación, con un ícono de cruz roja, hasta que el usuario presione su botón "Aceptar"; al cerrar un error de validación, el formulario sigue abierto con todos los datos ingresados y el foco vuelve al campo con el error. Al cerrar cualquier error, el foco vuelve al elemento que corresponde a ese error o, si ese elemento ya no está en pantalla, al primer control enfocable de la pantalla actual; mientras el error está en pantalla, un clic en su fondo o dentro del mensaje fuera de "Aceptar" no saca el foco del mensaje (agregado por FIX-001).
+- FR-45 (RNF-07): El sistema debe mostrar el mensaje "No se pudieron cargar sus movimientos. Vuelva a intentarlo." cuando falle la carga de la cuenta, el saldo o la lista, o cuando alguno de sus montos o el saldo lleguen con un formato inesperado (agregado por FIX-001); al presionar "Aceptar" debe reintentar la carga.
 - FR-46 (RNF-07, RNF-05): El sistema debe mostrar el mensaje "No se pudo guardar el movimiento. Vuelva a intentarlo." cuando el servidor falle o rechace el alta (incluida una fecha rechazada por FR-22), manteniendo abierto el formulario con los datos ingresados y sin modificar la lista ni el saldo.
 
 **Agregados en la revisión de DEFINE**
@@ -201,6 +201,9 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - AC-46 (FR-43; origen: PRD AC-128): WHEN el usuario A, con el mensaje "Gasto registrado con éxito." todavía en pantalla, presiona "Añadir Gasto", ingresa el monto 500 y presiona "Guardar", THE sistema SHALL registrar el segundo gasto sin que haya tenido que cerrar el primer mensaje, en 3 interacciones, reemplazar el primer mensaje por el nuevo "Gasto registrado con éxito." y mantener el nuevo visible durante 3 segundos completos desde que aparece.
 - AC-47 (FR-44; origen: PRD AC-113): WHILE el mensaje "El monto debe ser mayor a 0." está en pantalla, WHEN pasan 10 segundos sin que el usuario A presione "Aceptar" y después lo presiona, THE sistema SHALL mantener el mensaje visible a los 10 segundos y cerrarlo al presionar "Aceptar".
 - AC-48 (FR-45, NFR-06): IF falla la carga de la cuenta, el saldo o la lista al mostrar la sección Cuenta (simulado en la prueba), THEN THE sistema SHALL mostrar "No se pudieron cargar sus movimientos. Vuelva a intentarlo." con el botón "Aceptar" y, al presionarlo con el servidor ya respondiendo, cargar y mostrar el saldo y la lista.
+- AC-70 (FR-45, NFR-06; agregado por FIX-001): IF al mostrar la sección Cuenta la lista llega con un movimiento de monto "abc", o la cuenta llega con el saldo "abc" (simulado en la prueba), THEN THE sistema SHALL mostrar en ambos casos "No se pudieron cargar sus movimientos. Vuelva a intentarlo." con el botón "Aceptar", sin dejar la pantalla en blanco, y, al presionarlo con el servidor ya respondiendo datos válidos, cargar y mostrar el saldo y la lista.
+- AC-71 (FR-44, NFR-07; agregado por FIX-001): IF el usuario A, que llegó a la sección Cuenta desde "Añadir Gasto", vuelve a "Añadir Gasto" con el botón Atrás del navegador mientras se procesa la eliminación de un movimiento y la eliminación falla (simulado en la prueba), THEN THE sistema SHALL mostrar "No se pudo eliminar el movimiento. Vuelva a intentarlo." y, al presionar "Aceptar", cerrar el mensaje y dejar el foco en la flecha para volver atrás de "Añadir Gasto", el primer control enfocable de esa pantalla.
+- AC-72 (FR-44, NFR-07; agregado por FIX-001): WHILE el mensaje "No se pudieron cargar sus movimientos. Vuelva a intentarlo." está en pantalla, WHEN el usuario A hace clic en el fondo del mensaje o en su texto y después presiona Tab, THE sistema SHALL mantener el foco en "Aceptar" en los dos casos.
 - AC-49 (FR-46, NFR-06): IF el servidor falla al guardar un gasto de 1500 del usuario A con saldo USD 10.000,00 (simulado en la prueba), THEN THE sistema SHALL mostrar "No se pudo guardar el movimiento. Vuelva a intentarlo.", mantener abierto el formulario con el monto "1.500" y la categoría y la fecha elegidas, no agregar el movimiento a la lista y mantener el saldo en "USD 10.000,00".
 
 **No funcionales**
@@ -253,3 +256,4 @@ latencia de hasta 100 ms al servidor, y al menos 100 mediciones por operación.
 - Un proyecto de Supabase con "Allow anonymous sign-ins" activado, su URL y su anon key en `.env.local`, y su service role key disponible solo para las pruebas (S-2), nunca en el código de la aplicación.
 - Stack de `AGENTS.md`: React 19 + Vite, supabase-js, react-router, react-day-picker + date-fns, Vitest + Testing Library, Playwright + axe-core.
 - No depende de otros sub-tickets. FEAT-001b y FEAT-001c dependen de este.
+- AC-71, agregado por FIX-001, usa la eliminación de movimientos de FEAT-001c (`docs/daw/prd/prd-FEAT-001c.md`, FR-10), ya integrada en main, como caso en que el elemento de origen del foco deja de estar en pantalla.
