@@ -28,6 +28,12 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - [FEAT-001b] Edición y ajuste del saldo en una sola operación atómica,
   sin cambiar la fecha de registro ni permitir editar movimientos de otro
   usuario; ediciones en menos de 2 s (p95).
+- [FEAT-001c] Opción "Eliminar" en el menú de cada fila, con confirmación
+  "¿Está seguro que desea eliminar este movimiento?" y los botones
+  "Cancelar" y "Confirmar", usable solo con el teclado.
+- [FEAT-001c] Eliminación y ajuste del saldo en una sola operación atómica,
+  sin permitir eliminar movimientos de otro usuario; al eliminar se vuelve
+  a la página 1 de la lista; eliminaciones en menos de 2 s (p95).
 
 ### Cambiado
 - [FEAT-001b] Los servicios comparten un único acceso al cliente de
